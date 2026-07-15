@@ -26,6 +26,12 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-unused-vars": "warn", // Use TS version
     },
   },
+  {
+    files: ["scripts/**/*.ts"],
+    rules: {
+      "no-console": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

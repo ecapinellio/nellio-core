@@ -9,7 +9,7 @@ const eslintConfig = defineConfig([
   js.configs.recommended,
   ...nextVitals,
   ...nextTs,
-  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts"]),
+  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts", "lib/supabase/database.types.ts"]),
   {
     files: ["**/*.ts", "**/*.tsx"],
     plugins: {

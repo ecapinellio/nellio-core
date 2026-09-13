@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isRouteAllowed } from "@/lib/rbac";
 
 const PUBLIC_PATHS = ["/login"];
 
@@ -44,6 +45,16 @@ export async function updateSession(request: NextRequest)
 	}
 
 	if (user && request.nextUrl.pathname === "/login")
+	{
+		const homeUrl = request.nextUrl.clone();
+		homeUrl.pathname = "/";
+		homeUrl.search = "";
+		return copyCookies(supabaseResponse, NextResponse.redirect(homeUrl));
+	}
+
+	// Role gate (ADR-006): "/" is always allowed (see lib/rbac.ts), so this
+	// can never loop even for a role with no other route available yet.
+	if (user && !isPublicPath && !isRouteAllowed(request.nextUrl.pathname, user.app_metadata.role))
 	{
 		const homeUrl = request.nextUrl.clone();
 		homeUrl.pathname = "/";

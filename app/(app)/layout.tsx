@@ -17,9 +17,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 		redirect("/login");
 	}
 
+	// role for access/nav decisions comes from the JWT (app_metadata), never
+	// from this query — see lib/rbac.ts and Decision 10 in the T8 plan.
 	const { data: profile } = await supabase
 		.from("users")
-		.select("name, role, tenants(name)")
+		.select("name, tenants(name)")
 		.eq("id", user.id)
 		.single();
 
@@ -30,7 +32,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 					<span className="mr-2 inline-block size-1.5 rounded-full bg-primary" />
 					Nellio Core
 				</div>
-				<AppShellNav />
+				<AppShellNav role={user.app_metadata.role} />
 			</aside>
 
 			<div className="flex min-w-0 flex-1 flex-col">

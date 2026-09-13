@@ -4,18 +4,23 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ListOrdered, PlusCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isRouteAllowed } from "@/lib/rbac";
 
 const navItems = [
 	{ href: "/orders/capture", label: "Capturar pedido", icon: PlusCircle },
 ];
 
-export function AppShellNav()
+// role is the JWT-sourced app_metadata.role (see app/(app)/layout.tsx and
+// lib/rbac.ts Decision 10) — never the users table column.
+export function AppShellNav({ role }: { role: string | null | undefined })
 {
 	const pathname = usePathname();
+	const visibleItems = navItems.filter(({ href }) => isRouteAllowed(href, role));
+	const showOrdersPlaceholder = isRouteAllowed("/orders", role);
 
 	return (
 		<nav className="flex flex-col gap-0.5">
-			{navItems.map(({ href, label, icon: Icon }) =>
+			{visibleItems.map(({ href, label, icon: Icon }) =>
 			{
 				const active = pathname === href;
 				return (
@@ -34,13 +39,15 @@ export function AppShellNav()
 			})}
 
 			{/* Lands in T6 — shown so the shell doesn't rearrange when it does. */}
-			<div
-				aria-disabled
-				className="flex cursor-not-allowed items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-muted-foreground/50"
-			>
-				<ListOrdered className="size-3.5" />
-				Pedidos
-			</div>
+			{showOrdersPlaceholder && (
+				<div
+					aria-disabled
+					className="flex cursor-not-allowed items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-muted-foreground/50"
+				>
+					<ListOrdered className="size-3.5" />
+					Pedidos
+				</div>
+			)}
 		</nav>
 	);
 }

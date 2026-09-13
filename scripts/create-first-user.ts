@@ -10,10 +10,19 @@
  *     --tenant-name "ECTEC" \
  *     --admin-email "milo@ectec.com" \
  *     --admin-name "Milo" \
- *     [--admin-password "..."]
+ *     [--admin-password "..."] \
+ *     [--role admin|operator|driver] \
+ *     [--tenant-id "<existing tenant uuid>"]
  *
  * If --admin-password is omitted, a random one is generated and printed
  * once — save it, it is not stored anywhere.
+ *
+ * --role defaults to "admin" (unchanged default). Pass --tenant-id to
+ * attach the new user to an existing tenant instead of creating one —
+ * this is how operator/driver test accounts get created for RBAC manual
+ * verification (T8g), since otherwise this script could only ever
+ * produce a fresh admin in a fresh tenant. --tenant-name is ignored when
+ * --tenant-id is given.
  */
 import { randomBytes } from "node:crypto";
 import { parseArgs } from "node:util";
@@ -34,25 +43,42 @@ function generatePassword(): string
 	return randomBytes(18).toString("base64url");
 }
 
+const VALID_ROLES = ["admin", "operator", "driver"] as const;
+type Role = (typeof VALID_ROLES)[number];
+
+function parseRole(value: string | undefined): Role
+{
+	const role = value ?? "admin";
+	if (!(VALID_ROLES as readonly string[]).includes(role))
+	{
+		throw new Error(`Invalid --role "${role}". Must be one of: ${VALID_ROLES.join(", ")}`);
+	}
+	return role as Role;
+}
+
 async function main()
 {
 	const { values } = parseArgs({
 		options: {
 			"tenant-name": { type: "string" },
+			"tenant-id": { type: "string" },
 			"admin-email": { type: "string" },
 			"admin-name": { type: "string" },
 			"admin-password": { type: "string" },
+			"role": { type: "string" },
 		},
 	});
 
 	const tenantName = values["tenant-name"];
+	const existingTenantId = values["tenant-id"];
 	const adminEmail = values["admin-email"];
 	const adminName = values["admin-name"];
+	const role = parseRole(values["role"]);
 
-	if (!tenantName || !adminEmail || !adminName)
+	if (!adminEmail || !adminName || (!existingTenantId && !tenantName))
 	{
 		console.error(
-			"Usage: pnpm bootstrap:admin -- --tenant-name <name> --admin-email <email> --admin-name <name> [--admin-password <password>]",
+			"Usage: pnpm bootstrap:admin -- --tenant-name <name> --admin-email <email> --admin-name <name> [--admin-password <password>] [--role admin|operator|driver] [--tenant-id <existing tenant uuid>]",
 		);
 		process.exit(1);
 	}
@@ -66,29 +92,42 @@ async function main()
 		auth: { autoRefreshToken: false, persistSession: false },
 	});
 
-	console.log(`Creating tenant "${tenantName}"...`);
-	const { data: tenant, error: tenantError } = await supabaseAdmin
-		.from("tenants")
-		.insert({ name: tenantName })
-		.select()
-		.single();
+	let tenantId = existingTenantId;
+	let resolvedTenantName = tenantName;
 
-	if (tenantError || !tenant)
+	if (!tenantId)
 	{
-		throw new Error(
-			`Failed to create tenant. Has the T2 schema migration run yet? ${tenantError?.message}`,
-		);
+		console.log(`Creating tenant "${tenantName}"...`);
+		const { data: tenant, error: tenantError } = await supabaseAdmin
+			.from("tenants")
+			.insert({ name: tenantName! })
+			.select()
+			.single();
+
+		if (tenantError || !tenant)
+		{
+			throw new Error(
+				`Failed to create tenant. Has the T2 schema migration run yet? ${tenantError?.message}`,
+			);
+		}
+
+		tenantId = tenant.id;
+		resolvedTenantName = tenant.name;
+	}
+	else
+	{
+		console.log(`Using existing tenant ${tenantId}...`);
 	}
 
-	console.log(`Creating auth user for ${adminEmail}...`);
+	console.log(`Creating auth user for ${adminEmail} (role: ${role})...`);
 	const { data: authUser, error: authError } =
 		await supabaseAdmin.auth.admin.createUser({
 			email: adminEmail,
 			password: generatedPassword,
 			email_confirm: true,
 			app_metadata: {
-				tenant_id: tenant.id,
-				role: "admin",
+				tenant_id: tenantId,
+				role,
 			},
 		});
 
@@ -100,9 +139,9 @@ async function main()
 	console.log("Creating users row...");
 	const { error: userRowError } = await supabaseAdmin.from("users").insert({
 		id: authUser.user.id,
-		tenant_id: tenant.id,
+		tenant_id: tenantId,
 		name: adminName,
-		role: "admin",
+		role,
 	});
 
 	if (userRowError)
@@ -111,8 +150,9 @@ async function main()
 	}
 
 	console.log("\nDone.");
-	console.log(`  Tenant:   ${tenantName} (${tenant.id})`);
-	console.log(`  Admin:    ${adminEmail}`);
+	console.log(`  Tenant:   ${resolvedTenantName ?? tenantId} (${tenantId})`);
+	console.log(`  Role:     ${role}`);
+	console.log(`  Email:    ${adminEmail}`);
 	if (!values["admin-password"])
 	{
 		console.log(`  Password: ${generatedPassword}  (save this — shown once)`);

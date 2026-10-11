@@ -135,3 +135,98 @@ export async function createOrder(supabase: Client, input: CreateOrderInput): Pr
 	const result = data as unknown as CreateOrderResult;
 	return { data: result, error: null };
 }
+
+export interface OrderListItem
+{
+	id: string;
+	status: string;
+	channel: string;
+	createdAt: string;
+	customerName: string;
+	itemCount: number;
+}
+
+/** Opaque keyset cursor (created_at, id) — see listOrders() for why. */
+export interface OrdersCursor
+{
+	createdAt: string;
+	id: string;
+}
+
+export interface ListOrdersResult
+{
+	orders: OrderListItem[];
+	nextCursor: OrdersCursor | null;
+}
+
+export const ORDERS_PAGE_SIZE = 50;
+
+interface OrderListRow
+{
+	id: string;
+	status: string;
+	channel: string;
+	created_at: string;
+	customers: { name: string } | null;
+	order_items: { count: number }[];
+}
+
+/**
+ * T6: paginated orders list (eng-review Decision 9 — ~50/page, "load more").
+ *
+ * Uses a (created_at, id) keyset cursor rather than offset/page-number
+ * pagination: offset pagination re-shifts every row when a new order lands
+ * mid-scroll (a real risk here — orders arrive continuously during the
+ * workday), silently skipping or duplicating rows across "load more" calls.
+ * The compound cursor (not created_at alone) is required for correctness:
+ * two orders can share the same created_at down to the microsecond under
+ * bursty capture, and a single-column cursor would silently drop one of
+ * them. RLS (is_operator_or_admin() + tenant match) already scopes which
+ * rows are visible — this only orders and slices what RLS has let through.
+ */
+export async function listOrders(
+	supabase: Client,
+	{ cursor, limit = ORDERS_PAGE_SIZE }: { cursor?: OrdersCursor; limit?: number } = {},
+): Promise<QueryResult<ListOrdersResult>>
+{
+	let query = supabase
+		.from("orders")
+		.select("id, status, channel, created_at, customers(name), order_items(count)")
+		.order("created_at", { ascending: false })
+		.order("id", { ascending: false })
+		.limit(limit);
+
+	if (cursor)
+	{
+		query = query.or(
+			`created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`,
+		);
+	}
+
+	const { data, error } = await query;
+
+	if (error)
+	{
+		return { data: null, error };
+	}
+
+	const rows = data as unknown as OrderListRow[];
+
+	const orders: OrderListItem[] = rows.map((row) => ({
+		id: row.id,
+		status: row.status,
+		channel: row.channel,
+		createdAt: row.created_at,
+		customerName: row.customers?.name ?? "—",
+		itemCount: row.order_items[0]?.count ?? 0,
+	}));
+
+	// Fewer rows than requested means this was the last page — the standard
+	// keyset heuristic, avoids a guaranteed-empty extra round trip.
+	const last = rows.at(-1);
+	const nextCursor = rows.length === limit && last
+		? { createdAt: last.created_at, id: last.id }
+		: null;
+
+	return { data: { orders, nextCursor }, error: null };
+}

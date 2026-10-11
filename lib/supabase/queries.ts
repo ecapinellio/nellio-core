@@ -184,6 +184,27 @@ interface OrderListRow
  * them. RLS (is_operator_or_admin() + tenant match) already scopes which
  * rows are visible — this only orders and slices what RLS has let through.
  */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * cursor is client-held state fed back into a hand-built PostgREST `.or()`
+ * filter string — RLS (tenant + role) is the real access boundary and
+ * already bounds every row this can return, so a malformed cursor can't
+ * escalate access. This validates anyway: an untrusted-shaped string here
+ * would otherwise reach PostgREST as a malformed filter and surface as a
+ * confusing 400, instead of a clean, caught error.
+ */
+function invalidCursorError(): PostgrestError
+{
+	return {
+		name: "PostgrestError",
+		message: "Invalid pagination cursor",
+		details: "",
+		hint: "",
+		code: "22023",
+	} as PostgrestError;
+}
+
 export async function listOrders(
 	supabase: Client,
 	{ cursor, limit = ORDERS_PAGE_SIZE }: { cursor?: OrdersCursor; limit?: number } = {},
@@ -198,8 +219,15 @@ export async function listOrders(
 
 	if (cursor)
 	{
+		const createdAt = new Date(cursor.createdAt);
+		if (Number.isNaN(createdAt.getTime()) || !UUID_RE.test(cursor.id))
+		{
+			return { data: null, error: invalidCursorError() };
+		}
+
+		const isoCreatedAt = createdAt.toISOString();
 		query = query.or(
-			`created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`,
+			`created_at.lt.${isoCreatedAt},and(created_at.eq.${isoCreatedAt},id.lt.${cursor.id})`,
 		);
 	}
 

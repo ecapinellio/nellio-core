@@ -66,14 +66,26 @@ describe("createOrder() / create_order() RPC", () =>
 		expect(error?.code).toBe("22004");
 	});
 
-	it("rejects blank notes", async () =>
+	it("accepts blank notes, normalized to null (slice 2: notes is optional)", async () =>
 	{
-		const { error } = await createOrder(tenant.admin, {
+		const { data, error } = await createOrder(tenant.admin, {
 			customer_id: customerId,
 			notes: "   ",
 			items: [{ product_id: productId, quantity: 1 }],
 		});
-		expect(error?.code).toBe("22004");
+		expect(error).toBeNull();
+		expect(data?.order.notes).toBeNull();
+	});
+
+	it("accepts null notes directly", async () =>
+	{
+		const { data, error } = await createOrder(tenant.admin, {
+			customer_id: customerId,
+			notes: null,
+			items: [{ product_id: productId, quantity: 1 }],
+		});
+		expect(error).toBeNull();
+		expect(data?.order.notes).toBeNull();
 	});
 
 	it("rejects an empty items array", async () =>

@@ -6,6 +6,7 @@ import {
 	quickAddProduct,
 	searchCustomers,
 	searchProducts,
+	updateProductPricing,
 } from "@/lib/supabase/queries";
 
 describe("query helpers", () =>
@@ -94,6 +95,41 @@ describe("query helpers", () =>
 				.from("products")
 				.update({ price_per_unit: -5 })
 				.eq("id", product!.id);
+			expect(error?.code).toBe("23514");
+		});
+	});
+
+	describe("updateProductPricing", () =>
+	{
+		it("sets price and unit on an existing product (slice 2 inline '+ precio' flow)", async () =>
+		{
+			const { data: product } = await quickAddProduct(tenant.admin, "No Price Yet");
+			expect(product?.price_per_unit).toBeNull();
+
+			const { data, error } = await updateProductPricing(tenant.admin, product!.id, {
+				pricePerUnit: 22.5,
+				unit: "kg",
+			});
+			expect(error).toBeNull();
+			expect(data?.price_per_unit).toBe(22.5);
+			expect(data?.unit).toBe("kg");
+		});
+
+		it("rejects price <= 0 via the table-level check (same constraint as T8's direct-update test)", async () =>
+		{
+			const { data: product } = await quickAddProduct(tenant.admin, "Update Target 2");
+			const { error } = await updateProductPricing(tenant.admin, product!.id, { pricePerUnit: 0, unit: "kg" });
+			expect(error?.code).toBe("23514");
+		});
+
+		it("rejects a unit outside the fixed list", async () =>
+		{
+			const { data: product } = await quickAddProduct(tenant.admin, "Update Target 3");
+			const { error } = await updateProductPricing(tenant.admin, product!.id, {
+				pricePerUnit: 10,
+				// @ts-expect-error -- deliberately outside the ProductUnit union
+				unit: "barrels",
+			});
 			expect(error?.code).toBe("23514");
 		});
 	});

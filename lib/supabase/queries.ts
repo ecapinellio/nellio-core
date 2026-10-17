@@ -44,9 +44,31 @@ export async function quickAddCustomer(supabase: Client, name: string): Promise<
 	return { data, error };
 }
 
-export async function quickAddProduct(supabase: Client, name: string): Promise<QueryResult<Product>>
+// Mirrors the quick_add_product RPC's check constraint (products_unit_check).
+export type ProductUnit = "ton" | "kg" | "lb" | "l" | "gal" | "each";
+
+export interface QuickAddProductOptions
 {
-	const { data, error } = await supabase.rpc("quick_add_product", { p_name: name });
+	pricePerUnit?: number;
+	unit?: ProductUnit;
+}
+
+/**
+ * pricePerUnit/unit are optional (slice 1 of the product-pricing block):
+ * the capture screen still only sends a name today, and making these
+ * mandatory here would break it until the UI that collects them exists.
+ */
+export async function quickAddProduct(
+	supabase: Client,
+	name: string,
+	options?: QuickAddProductOptions,
+): Promise<QueryResult<Product>>
+{
+	const { data, error } = await supabase.rpc("quick_add_product", {
+		p_name: name,
+		p_price_per_unit: options?.pricePerUnit,
+		p_unit: options?.unit,
+	});
 	return { data, error };
 }
 

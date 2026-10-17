@@ -59,3 +59,62 @@ for the full T8 plan and review report.
 **Priority:** P2
 **Depends on:** T8 (RLS role helpers + `role()`/`is_operator_or_admin()`) —
 already shipped, so this is unblocked whenever picked up.
+
+## Product Catalog
+
+### Dedicated product catalog page (candidate slice 6)
+
+**What:** An admin/operator screen to bulk-create and edit the full product
+catalog (name, price per unit, unit) outside the order-capture flow — the
+place to load everything ECTEC sells during onboarding, so operators rarely
+need quick-add's price/unit fields mid-capture at all.
+
+**Why:** Raised directly by the user while scoping the product-pricing
+block ("en el mejor de los casos el onboarding del cliente se cargan y
+crean todos los productos que tienen de una"). Inline quick-add (in the
+capture screen) should still exist for the in-the-moment exception — a
+customer orders something not yet in the catalog — but bulk/planned
+product management belongs on its own page, not bolted onto order capture.
+
+**Context:** Came up during `/plan-eng-review` for Slice 1 (precio+unidad en
+productos, 2026-10-17) as a direct question from the user about where
+product creation should live. Not one of the 5 originally-scoped slices
+(precio+unidad → rediseño de captura → kanban+DnD → dialog de detalle →
+dashboard) — new scope, deliberately not built now. See
+`~/.gstack/projects/ecapinellio-nellio-core/emiliocarbonell-main-eng-review-plan-20261017-slice1-product-pricing.md`.
+
+**Effort:** M
+**Priority:** P3
+**Depends on:** Slice 1 (products.price_per_unit/unit) — shipped.
+
+### order_items price + unit snapshotting (slice 5 input)
+
+**What:** `order_items` needs to capture the product's price *and* unit at
+the moment an order is placed (e.g. `price_at_order`, `unit_at_order`), not
+just reference the current values on `products`.
+
+**Why:** If a product's price or unit changes later, every historical order
+referencing it silently changes meaning — a price correction retroactively
+changes past revenue, and a unit correction (e.g. fixing a data-entry
+mistake, ton → kg) retroactively changes what old orders even mean. Slice 5
+(dashboard: ventas, pedidos del día) needs accurate historical totals and
+can't get them without a snapshot. Both fields have the identical bug
+shape; an earlier draft of this note only caught the price half.
+
+**Risk to flag explicitly for whoever picks this up:** by the time slice 5
+is scoped, slices 2-4 will already have generated real order data with no
+snapshot column at all — this isn't a greenfield schema decision anymore by
+then, it needs a backfill/migration strategy (what price/unit do pre-slice-5
+orders get retroactively assigned?). That strategy isn't scoped anywhere in
+the current 5-slice block. Don't let slice 5 discover this cold.
+
+**Context:** Flagged during Step 0 of `/plan-eng-review` for Slice 1
+(2026-10-17), expanded by the outside-voice review during that same session
+(which caught the unit half and the backfill-timing risk — the first draft
+only named price). Deliberately not solved in slice 1: it's an
+`order_items`/`orders` schema decision, not a `products` one.
+
+**Effort:** M (plus a backfill strategy — see Risk above)
+**Priority:** P2
+**Depends on:** Slice 1 (products.price_per_unit/unit) — shipped. Blocks an
+accurate slice 5 dashboard.

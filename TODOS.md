@@ -87,7 +87,7 @@ dashboard) — new scope, deliberately not built now. See
 **Priority:** P3
 **Depends on:** Slice 1 (products.price_per_unit/unit) — shipped.
 
-### order_items price + unit snapshotting (slice 5 input)
+### order_items price + unit snapshotting (slice 3 input — updated from slice 5)
 
 **What:** `order_items` needs to capture the product's price *and* unit at
 the moment an order is placed (e.g. `price_at_order`, `unit_at_order`), not
@@ -96,25 +96,33 @@ just reference the current values on `products`.
 **Why:** If a product's price or unit changes later, every historical order
 referencing it silently changes meaning — a price correction retroactively
 changes past revenue, and a unit correction (e.g. fixing a data-entry
-mistake, ton → kg) retroactively changes what old orders even mean. Slice 5
-(dashboard: ventas, pedidos del día) needs accurate historical totals and
-can't get them without a snapshot. Both fields have the identical bug
-shape; an earlier draft of this note only caught the price half.
+mistake, ton → kg) retroactively changes what old orders even mean. Both
+fields have the identical bug shape; an earlier draft of this note only
+caught the price half.
 
-**Risk to flag explicitly for whoever picks this up:** by the time slice 5
-is scoped, slices 2-4 will already have generated real order data with no
+**Urgency correction (from slice 2's review, 2026-10-17):** originally filed
+as "slice 5 input" (dashboard). That undersold it — **slice 3's kanban cards
+show "precio del pedido"**, which means slice 3, not slice 5, is the first
+slice that needs to re-read a historical order's total. Slice 2's own
+capture-screen total is fine as-is (computed live during capture, never
+re-read afterward — confirmed not a bug), but don't let that ephemeral-total
+reasoning get assumed to also cover slice 3's persistent, re-displayed one.
+
+**Risk to flag explicitly for whoever picks this up:** by the time this is
+scoped, slice 2 will already have generated real order data with no
 snapshot column at all — this isn't a greenfield schema decision anymore by
-then, it needs a backfill/migration strategy (what price/unit do pre-slice-5
+then, it needs a backfill/migration strategy (what price/unit do pre-slice-3
 orders get retroactively assigned?). That strategy isn't scoped anywhere in
-the current 5-slice block. Don't let slice 5 discover this cold.
+the current 5-slice block. Don't let slice 3 discover this cold.
 
 **Context:** Flagged during Step 0 of `/plan-eng-review` for Slice 1
 (2026-10-17), expanded by the outside-voice review during that same session
 (which caught the unit half and the backfill-timing risk — the first draft
-only named price). Deliberately not solved in slice 1: it's an
-`order_items`/`orders` schema decision, not a `products` one.
+only named price). Urgency corrected during Slice 2's review (same day) —
+see Urgency correction above. Deliberately not solved in slice 2: it's an
+`order_items`/`orders` schema decision, not a capture-screen one.
 
 **Effort:** M (plus a backfill strategy — see Risk above)
-**Priority:** P2
-**Depends on:** Slice 1 (products.price_per_unit/unit) — shipped. Blocks an
-accurate slice 5 dashboard.
+**Priority:** P1 (raised from P2 — blocks slice 3, not just slice 5)
+**Depends on:** Slice 1 (products.price_per_unit/unit) — shipped. Blocks
+accurate kanban card pricing (slice 3) and the sales dashboard (slice 5).

@@ -43,7 +43,9 @@ export function DuplicateDialog({ order, onCancel, onConfirmNew }: DuplicateDial
 								{new Date(order.created_at).toLocaleTimeString("es-SV", { hour: "2-digit", minute: "2-digit" })}
 							</span>
 							{" · "}
-							<span className="text-muted-foreground">{order.notes.slice(0, 80)}{order.notes.length > 80 ? "…" : ""}</span>
+							<span className="text-muted-foreground">
+								{order.notes ? `${order.notes.slice(0, 80)}${order.notes.length > 80 ? "…" : ""}` : "Sin notas"}
+							</span>
 						</div>
 					)
 					: null}

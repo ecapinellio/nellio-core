@@ -38,18 +38,63 @@ describe("query helpers", () =>
 			expect(error?.code).toBe("22004");
 		});
 
-		it("quickAddProduct creates a row scoped to the caller's own tenant", async () =>
+		it("quickAddProduct creates a row scoped to the caller's own tenant, price/unit nullable by default", async () =>
 		{
 			const { data, error } = await quickAddProduct(tenant.admin, "Cloro 5L");
 			expect(error).toBeNull();
 			expect(data?.name).toBe("Cloro 5L");
 			expect(data?.tenant_id).toBe(tenant.tenantId);
+			expect(data?.price_per_unit).toBeNull();
+			expect(data?.unit).toBeNull();
 		});
 
 		it("quickAddProduct rejects a blank name", async () =>
 		{
 			const { error } = await quickAddProduct(tenant.admin, "");
 			expect(error?.code).toBe("22004");
+		});
+
+		it("quickAddProduct accepts price_per_unit and unit together", async () =>
+		{
+			const { data, error } = await quickAddProduct(tenant.admin, "Ácido Sulfúrico", {
+				pricePerUnit: 45.5,
+				unit: "l",
+			});
+			expect(error).toBeNull();
+			expect(data?.price_per_unit).toBe(45.5);
+			expect(data?.unit).toBe("l");
+		});
+
+		it("quickAddProduct rejects price_per_unit <= 0 (RPC-level check)", async () =>
+		{
+			const { error } = await quickAddProduct(tenant.admin, "Negative Price Product", {
+				pricePerUnit: 0,
+				unit: "kg",
+			});
+			expect(error?.code).toBe("22003");
+		});
+
+		it("quickAddProduct rejects a unit outside the fixed list", async () =>
+		{
+			const { error } = await quickAddProduct(tenant.admin, "Bad Unit Product", {
+				// @ts-expect-error -- deliberately outside the ProductUnit union
+				unit: "barrels",
+				pricePerUnit: 10,
+			});
+			expect(error?.code).toBe("23514"); // check_violation
+		});
+
+		it("a direct update bypassing the RPC cannot set a non-positive price (table-level check, Decision 9)", async () =>
+		{
+			const { data: product } = await quickAddProduct(tenant.admin, "Direct Update Target", {
+				pricePerUnit: 10,
+				unit: "kg",
+			});
+			const { error } = await tenant.admin
+				.from("products")
+				.update({ price_per_unit: -5 })
+				.eq("id", product!.id);
+			expect(error?.code).toBe("23514");
 		});
 	});
 
@@ -58,7 +103,15 @@ describe("query helpers", () =>
 		beforeAll(async () =>
 		{
 			await quickAddCustomer(tenant.admin, "Química Industrial S.A.");
-			await quickAddProduct(tenant.admin, "Ácido Muriático");
+			await quickAddProduct(tenant.admin, "Ácido Muriático", { pricePerUnit: 12.75, unit: "gal" });
+		});
+
+		it("searchProducts returns price_per_unit and unit (select p.* flows through, no RPC change needed)", async () =>
+		{
+			const { data } = await searchProducts(tenant.admin, "Acido Muriatico");
+			const match = data?.find((p) => p.name === "Ácido Muriático");
+			expect(match?.price_per_unit).toBe(12.75);
+			expect(match?.unit).toBe("gal");
 		});
 
 		it("empty query returns a browse list, not an error", async () =>

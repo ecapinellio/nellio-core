@@ -204,7 +204,11 @@ anonymous_users = 30
 # Number of sessions that can be refreshed in a 5 minute interval per IP address.
 token_refresh = 150
 # Number of sign up and sign-in requests that can be made in a 5 minute interval per IP address (excludes anonymous users).
-sign_in_sign_ups = 30
+# Raised from the 30 default (T7, Decision 12): the Vitest suite signs in
+# 3 real test users per file via setupTenant(), and iterating the suite a
+# few times while debugging easily exceeds 30 within 5 minutes. Local-stack
+# only — this file has no effect on any production project.
+sign_in_sign_ups = 300
 # Number of OTP / Magic link verifications that can be made in a 5 minute interval per IP address.
 token_verifications = 30
 # Number of Web3 logins that can be made in a 5 minute interval per IP address.

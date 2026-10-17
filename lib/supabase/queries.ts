@@ -72,6 +72,27 @@ export async function quickAddProduct(
 	return { data, error };
 }
 
+/**
+ * Slice 2's inline "+ precio" flow: a product quick-added without a price
+ * (allowed since slice 1) gets one added after the fact, without a modal
+ * blocking creation. The table-level check constraint on price_per_unit
+ * (slice 1) already guards the value — this doesn't re-validate.
+ */
+export async function updateProductPricing(
+	supabase: Client,
+	productId: string,
+	options: QuickAddProductOptions,
+): Promise<QueryResult<Product>>
+{
+	const { data, error } = await supabase
+		.from("products")
+		.update({ price_per_unit: options.pricePerUnit, unit: options.unit })
+		.eq("id", productId)
+		.select()
+		.single();
+	return { data, error };
+}
+
 export type DuplicateCheckResult =
 	| { status: "ok"; duplicate: Order | null }
 	| { status: "check_failed"; error: PostgrestError };
@@ -125,7 +146,8 @@ export interface CreateOrderItemInput
 export interface CreateOrderInput
 {
 	customer_id: string;
-	notes: string;
+	/** Optional since slice 2 — the RPC itself now accepts null/blank. */
+	notes: string | null;
 	items: CreateOrderItemInput[];
 	channel?: "whatsapp" | "portal";
 }
@@ -144,7 +166,11 @@ export async function createOrder(supabase: Client, input: CreateOrderInput): Pr
 {
 	const { data, error } = await supabase.rpc("create_order", {
 		p_customer_id: input.customer_id,
-		p_notes: input.notes,
+		// The generated Args type has p_notes as a required `string` — it
+		// doesn't know the RPC itself normalizes null/blank to NULL (slice 2).
+		// Cast is safe: we're deliberately passing what the generated type
+		// can't express, not working around real required-ness.
+		p_notes: input.notes as string,
 		p_items: input.items as unknown as Json,
 		p_channel: input.channel ?? "whatsapp",
 	});

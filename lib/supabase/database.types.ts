@@ -146,7 +146,7 @@ export type Database = {
           created_by: string | null
           customer_id: string
           id: string
-          notes: string
+          notes: string | null
           status: string
           tenant_id: string
           updated_at: string
@@ -157,7 +157,7 @@ export type Database = {
           created_by?: string | null
           customer_id: string
           id?: string
-          notes: string
+          notes?: string | null
           status?: string
           tenant_id: string
           updated_at?: string
@@ -168,7 +168,7 @@ export type Database = {
           created_by?: string | null
           customer_id?: string
           id?: string
-          notes?: string
+          notes?: string | null
           status?: string
           tenant_id?: string
           updated_at?: string

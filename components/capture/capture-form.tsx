@@ -11,9 +11,11 @@ import {
 	searchCustomers,
 	type Customer,
 	type Order,
+	type ProductUnit,
 } from "@/lib/supabase/queries";
 import { EntitySearch } from "@/components/capture/entity-search";
 import { LineItems, type LineItem } from "@/components/capture/line-items";
+import { OrderOverview } from "@/components/capture/order-overview";
 import { DuplicateDialog } from "@/components/capture/duplicate-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -41,9 +43,10 @@ export function CaptureForm()
 	const [error, setError] = useState<FormError | null>(null);
 	const [success, setSuccess] = useState<{ orderId: string } | null>(null);
 
-	const canSubmit = customer !== null && items.length > 0 && notes.trim().length > 0 && !submitting;
+	// Slice 2, Decision 3: notes is optional — dropped from canSubmit.
+	const canSubmit = customer !== null && items.length > 0 && !submitting;
 
-	function addItem(productId: string, productName: string)
+	function addItem(productId: string, productName: string, pricePerUnit: number | null, unit: ProductUnit | null)
 	{
 		setItems((prev) =>
 		{
@@ -52,7 +55,7 @@ export function CaptureForm()
 			{
 				return prev.map((i) => (i.productId === productId ? { ...i, quantity: i.quantity + 1 } : i));
 			}
-			return [...prev, { productId, productName, quantity: 1 }];
+			return [...prev, { productId, productName, quantity: 1, pricePerUnit, unit }];
 		});
 	}
 
@@ -66,6 +69,13 @@ export function CaptureForm()
 		setItems((prev) => prev.filter((i) => i.productId !== productId));
 	}
 
+	// Slice 2, Decision 5: quick-add never collects price up front — this is
+	// the inline "+ precio" flow filling it in after the fact.
+	function updatePrice(productId: string, pricePerUnit: number, unit: ProductUnit)
+	{
+		setItems((prev) => prev.map((i) => (i.productId === productId ? { ...i, pricePerUnit, unit } : i)));
+	}
+
 	async function doCreate()
 	{
 		if (!customer)
@@ -75,7 +85,7 @@ export function CaptureForm()
 		setSubmitting(true);
 		const { data, error: createError } = await createOrder(supabase, {
 			customer_id: customer.id,
-			notes,
+			notes: notes.trim() || null,
 			items: items.map((i) => ({ product_id: i.productId, quantity: i.quantity })),
 			channel: "whatsapp",
 		});
@@ -143,7 +153,8 @@ export function CaptureForm()
 	}
 
 	return (
-		<div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+		<div className="grid items-start gap-4 lg:grid-cols-[1.4fr_1fr]">
+			{/* Left column: entry form — everything the operator fills in. */}
 			<div className="flex flex-col gap-4">
 				<Card>
 					<CardHeader>
@@ -188,19 +199,18 @@ export function CaptureForm()
 							onAdd={addItem}
 							onQuantityChange={updateQuantity}
 							onRemove={removeItem}
+							onPriceUpdate={updatePrice}
 						/>
 					</CardContent>
 				</Card>
-			</div>
 
-			<div className="flex flex-col gap-4">
 				<Card>
 					<CardHeader>
-						<CardTitle>Mensaje original</CardTitle>
+						<CardTitle>Notas</CardTitle>
 					</CardHeader>
 					<CardContent>
 						<div className="flex flex-col gap-2">
-							<Label htmlFor="notes">Pega o transcribe el mensaje de WhatsApp</Label>
+							<Label htmlFor="notes">Opcional — mensaje original, contexto, lo que haga falta</Label>
 							<Textarea
 								id="notes"
 								value={notes}
@@ -212,6 +222,14 @@ export function CaptureForm()
 						</div>
 					</CardContent>
 				</Card>
+			</div>
+
+			{/* Right column: live, sticky overview — Decision 1, standard
+			    checkout-UX pattern (form left, summary + submit right).
+			    Sticky on this whole group, not the individual cards, so the
+			    offset stays correct regardless of either card's height. */}
+			<div className="sticky top-6 flex flex-col gap-4">
+				<OrderOverview customer={customer} items={items} />
 
 				<Card>
 					<CardContent className="flex flex-col gap-3">

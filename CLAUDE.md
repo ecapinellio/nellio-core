@@ -178,7 +178,31 @@ verificación en backend.
 
 ---
 
-## 8. Estilo de trabajo preferido
+## 8. Testing
+
+**Comando:** `pnpm test` (una corrida) o `pnpm test:watch` (modo watch). Vitest.
+
+**Requiere el stack local de Supabase corriendo** (`supabase start`) — los
+tests son de integración contra Postgres real, no mocks. `tests/fixtures.ts`
+crea y borra tenants/usuarios reales vía `service_role`; tiene un guard que
+aborta si `NEXT_PUBLIC_SUPABASE_URL` no apunta a `127.0.0.1`/`localhost`.
+
+**Patrón:** cada archivo de test crea su propio tenant + usuarios
+admin/operator/driver (`setupTenant()` en `tests/fixtures.ts`), inicia sesión
+de verdad con cada uno (no se simula el rol por SQL), y limpia todo en
+`afterAll`. Como `tenant_id` está en todas las tablas (ADR-001), los archivos
+corren en paralelo sin pisarse.
+
+**Qué cubre hoy:** query helpers (`lib/supabase/queries.ts`), `create_order()`
+(validación + atomicidad), paginación de `listOrders()`, y la matriz completa
+de RLS por tenant+rol (4 tablas × 3 operaciones × 3 roles).
+
+**CI:** `.github/workflows/test.yml` corre la suite en cada push/PR contra un
+stack de Supabase local efímero (sin secrets — son las keys demo locales).
+
+---
+
+## 9. Estilo de trabajo preferido
 
 - Respuestas directas, honestas y concisas: "solo lo necesario, corto y preciso".
 - Frontend developer: no asumir contexto profundo de backend/infra sin explicarlo.
@@ -187,7 +211,7 @@ verificación en backend.
 
 ---
 
-## 9. gstack
+## 10. gstack
 
 Para toda navegación web, usar el skill `/browse` de gstack. **Nunca** usar
 las herramientas `mcp__claude-in-chrome__*`.

@@ -10,17 +10,20 @@ describe("createOrder() / create_order() RPC", () =>
 	let otherTenant: TestTenant;
 	let customerId: string;
 	let productId: string;
+	let pricedProductId: string;
 
 	beforeAll(async () =>
 	{
 		[tenant, otherTenant] = await Promise.all([setupTenant(), setupTenant()]);
 
-		const [{ data: customer }, { data: product }] = await Promise.all([
+		const [{ data: customer }, { data: product }, { data: pricedProduct }] = await Promise.all([
 			quickAddCustomer(tenant.admin, "Create Order Customer"),
 			quickAddProduct(tenant.admin, "Create Order Product"),
+			quickAddProduct(tenant.admin, "Priced Product", { pricePerUnit: 15.5, unit: "kg" }),
 		]);
 		customerId = customer!.id;
 		productId = product!.id;
+		pricedProductId = pricedProduct!.id;
 	});
 
 	afterAll(async () =>
@@ -50,6 +53,53 @@ describe("createOrder() / create_order() RPC", () =>
 		expect(data?.order.customer_id).toBe(customerId);
 		expect(data?.items).toHaveLength(1);
 		expect(data?.items[0].quantity).toBe(2);
+	});
+
+	it("S3a: snapshots price_at_order/unit_at_order from the product at creation time (priced product)", async () =>
+	{
+		const { data, error } = await createOrder(tenant.admin, {
+			customer_id: customerId,
+			notes: "priced product",
+			items: [{ product_id: pricedProductId, quantity: 3 }],
+		});
+
+		expect(error).toBeNull();
+		expect(data?.items[0].price_at_order).toBe(15.5);
+		expect(data?.items[0].unit_at_order).toBe("kg");
+	});
+
+	it("S3a: price_at_order/unit_at_order are null for a product with no price set", async () =>
+	{
+		const { data, error } = await createOrder(tenant.admin, {
+			customer_id: customerId,
+			notes: "unpriced product",
+			items: [{ product_id: productId, quantity: 1 }],
+		});
+
+		expect(error).toBeNull();
+		expect(data?.items[0].price_at_order).toBeNull();
+		expect(data?.items[0].unit_at_order).toBeNull();
+	});
+
+	it("S3a: the snapshot does not change later if the product's price changes (immutability)", async () =>
+	{
+		const { data: drifted } = await quickAddProduct(tenant.admin, "Drift Product", { pricePerUnit: 20, unit: "l" });
+
+		const { data: created } = await createOrder(tenant.admin, {
+			customer_id: customerId,
+			notes: "drift check",
+			items: [{ product_id: drifted!.id, quantity: 1 }],
+		});
+		expect(created?.items[0].price_at_order).toBe(20);
+
+		await tenant.admin.from("products").update({ price_per_unit: 99 }).eq("id", drifted!.id);
+
+		const { data: reread } = await tenant.admin
+			.from("order_items")
+			.select("price_at_order")
+			.eq("id", created!.items[0].id)
+			.single();
+		expect(reread?.price_at_order).toBe(20);
 	});
 
 	it("rejects a null customer_id", async () =>

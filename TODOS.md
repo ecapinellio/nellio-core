@@ -87,7 +87,15 @@ dashboard) — new scope, deliberately not built now. See
 **Priority:** P3
 **Depends on:** Slice 1 (products.price_per_unit/unit) — shipped.
 
-### order_items price + unit snapshotting (slice 3 input — updated from slice 5)
+### ~~order_items price + unit snapshotting (slice 3 input — updated from slice 5)~~ — DONE
+
+**Resolved 2026-10-18** (slice 3, S3a): `order_items.price_at_order`/
+`unit_at_order` added, populated by `create_order()` at insert time. No
+backfill for pre-migration orders — they render "Sin precio" instead, a
+graceful null rather than a fabricated historical value (decided during
+`/plan-eng-review` for slice 3, not the backfill strategy this note
+originally called for — judged not worth the complexity for a pre-launch
+pilot with no real historical data yet).
 
 **What:** `order_items` needs to capture the product's price *and* unit at
 the moment an order is placed (e.g. `price_at_order`, `unit_at_order`), not

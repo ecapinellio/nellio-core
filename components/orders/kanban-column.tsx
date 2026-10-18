@@ -27,7 +27,7 @@ export const KanbanColumn = forwardRef<HTMLDivElement, KanbanColumnProps>(functi
 )
 {
 	return (
-		<div className="flex h-full w-[300px] shrink-0 flex-col rounded-lg border border-border bg-muted/30">
+		<div className="flex h-full min-w-[280px] flex-1 flex-col rounded-lg border border-border bg-muted/30">
 			<div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
 				<OrderStatusBadge status={status} />
 				<span className="font-mono text-xs tabular-nums text-muted-foreground">{count}</span>

@@ -28,6 +28,14 @@ interface OrderCardProps
 
 const MAX_VISIBLE_ITEMS = 3;
 
+/** dd-mm-yyyy hh:mm:ss in the viewer's local time, not `toLocaleDateString`'s locale-dependent shorthand — an operator needs the exact minute an order landed, not just the day. */
+function formatOrderTimestamp(iso: string): string
+{
+	const d = new Date(iso);
+	const pad = (n: number) => String(n).padStart(2, "0");
+	return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 /**
  * Presentational only — drag wiring (ref/listeners/attributes from
  * @dnd-kit's useSortable) is spread in by OrdersKanban (S3f), not imported
@@ -99,9 +107,9 @@ export const OrderCard = forwardRef<HTMLDivElement, OrderCardProps>(function Ord
 					)}
 			</div>
 
-			<div className="flex items-center justify-between gap-2">
-				<span className="font-mono text-xs text-muted-foreground">
-					{new Date(order.createdAt).toLocaleDateString("es-SV", { day: "2-digit", month: "short" })}
+			<div className="flex flex-wrap items-center justify-between gap-2">
+				<span className="font-mono text-xs tabular-nums text-muted-foreground">
+					{formatOrderTimestamp(order.createdAt)}
 				</span>
 
 				{showConfirmButton

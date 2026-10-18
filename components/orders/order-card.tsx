@@ -1,0 +1,104 @@
+import { forwardRef } from "react";
+import type { CSSProperties, HTMLAttributes } from "react";
+import type { KanbanOrder } from "@/lib/supabase/queries";
+import { calculateOrderTotal } from "@/lib/order-math";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+interface OrderCardProps extends HTMLAttributes<HTMLDivElement>
+{
+	order: KanbanOrder;
+	showConfirmButton?: boolean;
+	onConfirm?: () => void;
+	isDragging?: boolean;
+	style?: CSSProperties;
+}
+
+const MAX_VISIBLE_ITEMS = 3;
+
+/**
+ * Presentational only — drag wiring (ref/listeners/attributes from
+ * @dnd-kit's useSortable) is spread in by OrdersKanban (S3f), not imported
+ * here, so this component has no @dnd-kit dependency of its own.
+ *
+ * No hover-elevate treatment (design review, Decision 7): that would read
+ * as "clickable to open a detail view", a feature that doesn't exist until
+ * slice 4. `cursor-grab` is the only affordance signaling "this moves".
+ */
+export const OrderCard = forwardRef<HTMLDivElement, OrderCardProps>(function OrderCard(
+	{ order, showConfirmButton, onConfirm, isDragging, style, className, ...dragProps },
+	ref,
+)
+{
+	const { total, unpricedCount } = calculateOrderTotal(
+		order.items.map((item) => ({ quantity: item.quantity, priceAtOrder: item.priceAtOrder })),
+	);
+	const allUnpriced = order.items.length > 0 && unpricedCount === order.items.length;
+	const visibleItems = order.items.slice(0, MAX_VISIBLE_ITEMS);
+	const extraCount = order.items.length - visibleItems.length;
+
+	return (
+		<div
+			ref={ref}
+			style={style}
+			{...dragProps}
+			className={cn(
+				"flex cursor-grab flex-col gap-2 rounded-md border border-border bg-card p-3 active:cursor-grabbing",
+				isDragging ? "opacity-50 shadow-md" : "shadow-none",
+				className,
+			)}
+		>
+			<span className="font-mono text-xs text-muted-foreground">{order.id.slice(0, 8)}</span>
+
+			<p className="truncate text-sm font-semibold">{order.customerName}</p>
+
+			{order.items.length > 0
+				? (
+					<div className="flex flex-col gap-0.5">
+						{visibleItems.map((item, i) => (
+							<p key={i} className="truncate text-xs text-muted-foreground">
+								{item.quantity} × {item.productName}
+							</p>
+						))}
+						{extraCount > 0 ? <p className="text-xs text-muted-foreground">+{extraCount} más</p> : null}
+					</div>
+				)
+				: null}
+
+			<div className="border-t border-border pt-2">
+				{allUnpriced
+					? <span className="text-sm italic text-muted-foreground">Sin precio</span>
+					: (
+						<span className="font-mono text-sm font-bold tabular-nums">
+							${total.toFixed(2)}
+							{unpricedCount > 0
+								? <span className="ml-1 font-sans text-xs font-normal text-muted-foreground">+ {unpricedCount} sin precio</span>
+								: null}
+						</span>
+					)}
+			</div>
+
+			<div className="flex items-center justify-between gap-2">
+				<span className="font-mono text-xs text-muted-foreground">
+					{new Date(order.createdAt).toLocaleDateString("es-SV", { day: "2-digit", month: "short" })}
+				</span>
+
+				{showConfirmButton
+					? (
+						<Button
+							size="sm"
+							className="h-7 px-2 text-xs"
+							onClick={(e) =>
+							{
+								e.stopPropagation();
+								onConfirm?.();
+							}}
+						>
+							Confirmar
+						</Button>
+					)
+					: null}
+			</div>
+		</div>
+	);
+});

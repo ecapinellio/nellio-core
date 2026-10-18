@@ -40,8 +40,7 @@ function SortableOrderCard({
 			onConfirm={onConfirm}
 			isDragging={isDragging}
 			style={{ transform: CSS.Transform.toString(transform), transition: transition ?? undefined }}
-			{...attributes}
-			{...listeners}
+			dragHandleProps={{ ...attributes, ...listeners }}
 		/>
 	);
 }

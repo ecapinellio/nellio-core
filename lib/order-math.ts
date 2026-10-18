@@ -23,7 +23,7 @@ export function calculateLineTotal(quantity: number, pricePerUnit: number | null
 export const ORDER_STATUSES = ["pending", "confirmed", "dispatched", "delivered"] as const;
 export type OrderStatus = typeof ORDER_STATUSES[number];
 
-function isOrderStatus(status: string): status is OrderStatus
+export function isOrderStatus(status: string): status is OrderStatus
 {
 	return (ORDER_STATUSES as readonly string[]).includes(status);
 }

@@ -1,5 +1,6 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json, Tables } from "@/lib/supabase/database.types";
+import type { OrderStatus } from "@/lib/order-math";
 
 export type Customer = Tables<"customers">;
 export type Product = Tables<"products">;
@@ -305,4 +306,103 @@ export async function listOrders(
 		: null;
 
 	return { data: { orders, nextCursor }, error: null };
+}
+
+export interface KanbanOrderItem
+{
+	quantity: number;
+	priceAtOrder: number | null;
+	productName: string;
+}
+
+export interface KanbanOrder
+{
+	id: string;
+	status: string;
+	createdAt: string;
+	customerName: string;
+	items: KanbanOrderItem[];
+}
+
+/** Terminal state (delivered) accumulates forever — the historial page (listOrders()) covers anything beyond this cap. */
+const DELIVERED_KANBAN_LIMIT = 50;
+
+const KANBAN_SELECT = "id, status, created_at, customers(name), order_items(quantity, price_at_order, products(name))";
+
+interface KanbanOrderRow
+{
+	id: string;
+	status: string;
+	created_at: string;
+	customers: { name: string } | null;
+	order_items: { quantity: number; price_at_order: number | null; products: { name: string } | null }[];
+}
+
+/**
+ * Slice 3's kanban feed — a different shape than listOrders() (embedded line
+ * items + an active/delivered split, not flat itemCount + cursor pagination),
+ * so this is its own query rather than a listOrders() variant.
+ *
+ * Eng-review Decision 6: active statuses (pending/confirmed/dispatched) are
+ * fetched unbounded since they're actionable and self-limiting in practice —
+ * only `delivered` (a terminal state that accumulates forever) is capped, so
+ * it can't crowd out the columns a kanban exists to surface problems in.
+ */
+export async function listOrdersForKanban(supabase: Client): Promise<QueryResult<KanbanOrder[]>>
+{
+	const [activeResult, deliveredResult] = await Promise.all([
+		supabase
+			.from("orders")
+			.select(KANBAN_SELECT)
+			.in("status", ["pending", "confirmed", "dispatched"])
+			.order("created_at", { ascending: false }),
+		supabase
+			.from("orders")
+			.select(KANBAN_SELECT)
+			.eq("status", "delivered")
+			.order("created_at", { ascending: false })
+			.limit(DELIVERED_KANBAN_LIMIT),
+	]);
+
+	if (activeResult.error)
+	{
+		return { data: null, error: activeResult.error };
+	}
+	if (deliveredResult.error)
+	{
+		return { data: null, error: deliveredResult.error };
+	}
+
+	const rows = [...activeResult.data, ...deliveredResult.data] as unknown as KanbanOrderRow[];
+
+	const orders: KanbanOrder[] = rows.map((row) => ({
+		id: row.id,
+		status: row.status,
+		createdAt: row.created_at,
+		customerName: row.customers?.name ?? "—",
+		items: row.order_items.map((item) => ({
+			quantity: item.quantity,
+			priceAtOrder: item.price_at_order,
+			productName: item.products?.name ?? "—",
+		})),
+	}));
+
+	return { data: orders, error: null };
+}
+
+/**
+ * Drag-or-"Confirmar" status change. Direct update, not a new RPC — RLS
+ * already permits admin/operator to update orders (T8's role matrix), and
+ * there's no multi-table write here that would need create_order()'s
+ * atomicity guarantees.
+ */
+export async function updateOrderStatus(supabase: Client, orderId: string, status: OrderStatus): Promise<QueryResult<Order>>
+{
+	const { data, error } = await supabase
+		.from("orders")
+		.update({ status })
+		.eq("id", orderId)
+		.select()
+		.single();
+	return { data, error };
 }

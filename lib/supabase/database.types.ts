@@ -1,3 +1,6 @@
+Connecting to db 5432
+(node:1) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 error listeners added to [BoundPool]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+(Use `node --trace-warnings ...` to show where the warning was created)
 export type Json =
   | string
   | number
@@ -95,25 +98,31 @@ export type Database = {
           created_at: string
           id: string
           order_id: string
+          price_at_order: number | null
           product_id: string
           quantity: number
           tenant_id: string
+          unit_at_order: string | null
         }
         Insert: {
           created_at?: string
           id?: string
           order_id: string
+          price_at_order?: number | null
           product_id: string
           quantity: number
           tenant_id: string
+          unit_at_order?: string | null
         }
         Update: {
           created_at?: string
           id?: string
           order_id?: string
+          price_at_order?: number | null
           product_id?: string
           quantity?: number
           tenant_id?: string
+          unit_at_order?: string | null
         }
         Relationships: [
           {
@@ -547,3 +556,5 @@ export const Constants = {
   },
 } as const
 
+A new version of Supabase CLI is available: v2.121.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli

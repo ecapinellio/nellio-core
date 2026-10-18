@@ -1,36 +1,20 @@
 import type { Metadata } from "next";
-import { createClient } from "@/lib/supabase/server";
-import { listOrders } from "@/lib/supabase/queries";
-import { OrdersTable } from "@/components/orders/orders-table";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle } from "lucide-react";
+import { OrdersKanban } from "@/components/orders/orders-kanban";
 
 export const metadata: Metadata = {
 	title: "Pedidos — Nellio Core",
 };
 
-export default async function OrdersPage()
+export default function OrdersPage()
 {
-	const supabase = await createClient();
-	const { data, error } = await listOrders(supabase);
-
 	return (
 		<div className="flex flex-col gap-4">
 			<div>
 				<h1 className="text-xl font-semibold tracking-tight">Pedidos</h1>
-				<p className="text-sm text-muted-foreground">Todos los pedidos capturados, del más reciente al más antiguo.</p>
+				<p className="text-sm text-muted-foreground">Arrastra una card para cambiar su estado, o usa el botón Confirmar.</p>
 			</div>
 
-			{error
-				? (
-					<Alert variant="destructive">
-						<AlertTriangle />
-						<AlertDescription>No se pudieron cargar los pedidos. Intenta de nuevo.</AlertDescription>
-					</Alert>
-				)
-				: (
-					<OrdersTable initial={data!} />
-				)}
+			<OrdersKanban />
 		</div>
 	);
 }

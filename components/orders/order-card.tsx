@@ -3,6 +3,7 @@ import type { ButtonHTMLAttributes, CSSProperties } from "react";
 import { GripVertical } from "lucide-react";
 import type { KanbanOrder } from "@/lib/supabase/queries";
 import { calculateOrderTotal } from "@/lib/order-math";
+import { formatOrderTimestamp } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -27,14 +28,6 @@ interface OrderCardProps
 }
 
 const MAX_VISIBLE_ITEMS = 3;
-
-/** dd-mm-yyyy hh:mm:ss in the viewer's local time, not `toLocaleDateString`'s locale-dependent shorthand — an operator needs the exact minute an order landed, not just the day. */
-function formatOrderTimestamp(iso: string): string
-{
-	const d = new Date(iso);
-	const pad = (n: number) => String(n).padStart(2, "0");
-	return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-}
 
 /**
  * Presentational only — drag wiring (ref/listeners/attributes from

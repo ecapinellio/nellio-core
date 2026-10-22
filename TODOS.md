@@ -2,6 +2,75 @@
 
 ## Order Management
 
+### Mobile-friendly kanban board at /orders
+
+**What:** A deliberate mobile layout for the kanban board itself (columns,
+drag-and-drop), not just the order detail dialog.
+
+**Why:** Slice 4's order detail dialog got an explicit mobile-first design
+pass (user's call, reversing the original "desktop-only for now"
+recommendation). The board that opens it is still desktop-oriented —
+fixed-width columns (280px floor) with horizontal scroll, not designed
+for a phone. If mobile use of the dialog becomes common, the board
+underneath it is the natural next piece to need the same treatment.
+
+**Context:** Raised during slice 4's `/plan-design-review` (2026-10-22)
+right after the dialog's mobile-first decision — flagged as the logical
+follow-up, not built now since it would expand this slice's scope well
+beyond "add a detail dialog." Touch drag-and-drop in particular (not just
+layout) would need its own design pass — `@dnd-kit`'s `PointerSensor`
+doesn't automatically mean good touch ergonomics.
+
+**Effort:** L
+**Priority:** P2
+**Depends on:** Slice 3 (kanban board) — shipped. Not blocked by slice 4.
+
+
+
+### Role-differentiated permissions for order-detail price overrides
+
+**What:** Restrict editing `order_items.price_at_order` (the "edit price" flow
+in slice 4's order detail dialog) to `admin` only, instead of both `admin`
+and `operator` as today.
+
+**Why:** Today the dialog's price-override edit follows the same RLS model
+as the rest of the app (`is_operator_or_admin()`) — admin and operator are
+equal. No signal yet that ECTEC needs a finer split, but if a larger client
+later wants "only the owner can change a locked-in price," this is the first
+place that distinction would need to land (new RLS policy or an in-RPC role
+check), and it's worth having the reasoning for *why not now* on record.
+
+**Context:** Raised during slice 4's `/plan-eng-review` (2026-10-18) while
+reviewing the new `update_order_detail()` RPC's authorization model. The RPC
+explicitly checks `public.is_operator_or_admin()` (see the sibling TODO on
+RLS silent-no-op risk resolved in that same review) — adding an admin-only
+branch there is a small, contained change if this ever becomes real.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Slice 4 (order detail dialog) — shipped first.
+
+### Full price-change history for orders (not just the most recent)
+
+**What:** A log of every price override an order's line items ever went
+through, not just the most recent one.
+
+**Why:** Slice 4 ships `order_items.price_overridden_by`/`price_overridden_at`
+— enough to answer "who made the *current* price, and when," but it gets
+overwritten on a second edit. If an order's price gets corrected more than
+once, the earlier correction(s) and who made them are lost.
+
+**Context:** Raised during slice 4's `/plan-eng-review` (2026-10-18) as a
+scope boundary on the audit-trail work — the real use case (a customer
+price dispute) normally only needs "who made the current number," not a
+full history. Deferred rather than building an `order_item_price_history`
+table + trigger up front with no concrete need for it yet.
+
+**Effort:** M
+**Priority:** P3
+**Depends on:** Slice 4 (order detail dialog, `price_overridden_by/at`) —
+shipped first; this extends it.
+
 ### Reconciliation tooling for quick-added customer/product records
 
 **What:** An admin screen to find and merge near-duplicate customer/product

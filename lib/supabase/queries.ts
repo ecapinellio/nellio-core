@@ -406,3 +406,147 @@ export async function updateOrderStatus(supabase: Client, orderId: string, statu
 		.single();
 	return { data, error };
 }
+
+export interface OrderDetailItem
+{
+	id: string;
+	quantity: number;
+	priceAtOrder: number | null;
+	unitAtOrder: string | null;
+	productName: string;
+	/** Null means this line's price has never been edited since create_order()'s initial snapshot. */
+	priceOverriddenBy: string | null;
+	priceOverriddenByName: string | null;
+	priceOverriddenAt: string | null;
+}
+
+export interface OrderDetail
+{
+	id: string;
+	status: string;
+	channel: string;
+	notes: string | null;
+	createdAt: string;
+	updatedAt: string;
+	customerName: string;
+	customerPhone: string | null;
+	items: OrderDetailItem[];
+}
+
+const ORDER_DETAIL_SELECT = "id, status, channel, notes, created_at, updated_at, " +
+	"customers(name, phone), " +
+	"order_items(id, quantity, price_at_order, unit_at_order, price_overridden_by, price_overridden_at, " +
+	"products(name), users!order_items_price_overridden_by_fkey(name))";
+
+interface OrderDetailRow
+{
+	id: string;
+	status: string;
+	channel: string;
+	notes: string | null;
+	created_at: string;
+	updated_at: string;
+	customers: { name: string; phone: string | null } | null;
+	order_items: {
+		id: string;
+		quantity: number;
+		price_at_order: number | null;
+		unit_at_order: string | null;
+		price_overridden_by: string | null;
+		price_overridden_at: string | null;
+		products: { name: string } | null;
+		users: { name: string } | null;
+	}[];
+}
+
+/**
+ * Slice 4's detail dialog — a dedicated, on-demand fetch (not folded into
+ * listOrdersForKanban(), per the design review's Decision 7) so the
+ * board's initial load stays lean. .single() surfaces "not found /
+ * cross-tenant / RLS-blocked" uniformly as a PostgrestError, same as every
+ * other single-row fetch in this file.
+ */
+export async function getOrderDetail(supabase: Client, orderId: string): Promise<QueryResult<OrderDetail>>
+{
+	const { data, error } = await supabase
+		.from("orders")
+		.select(ORDER_DETAIL_SELECT)
+		.eq("id", orderId)
+		.single();
+
+	if (error)
+	{
+		return { data: null, error };
+	}
+
+	const row = data as unknown as OrderDetailRow;
+
+	const detail: OrderDetail = {
+		id: row.id,
+		status: row.status,
+		channel: row.channel,
+		notes: row.notes,
+		createdAt: row.created_at,
+		updatedAt: row.updated_at,
+		customerName: row.customers?.name ?? "—",
+		customerPhone: row.customers?.phone ?? null,
+		items: row.order_items.map((item) => ({
+			id: item.id,
+			quantity: item.quantity,
+			priceAtOrder: item.price_at_order,
+			unitAtOrder: item.unit_at_order,
+			productName: item.products?.name ?? "—",
+			priceOverriddenBy: item.price_overridden_by,
+			priceOverriddenByName: item.users?.name ?? null,
+			priceOverriddenAt: item.price_overridden_at,
+		})),
+	};
+
+	return { data: detail, error: null };
+}
+
+export interface PriceUpdate
+{
+	orderItemId: string;
+	priceAtOrder: number;
+}
+
+export interface UpdateOrderDetailInput
+{
+	notes: string | null;
+	priceUpdates: PriceUpdate[];
+}
+
+export interface UpdateOrderDetailResult
+{
+	order: Order;
+	items: OrderItem[];
+}
+
+/** Wraps the update_order_detail() RPC (S4a) — the single atomic write path for the dialog's notes+price edits. */
+export async function updateOrderDetail(
+	supabase: Client,
+	orderId: string,
+	input: UpdateOrderDetailInput,
+): Promise<QueryResult<UpdateOrderDetailResult>>
+{
+	const { data, error } = await supabase.rpc("update_order_detail", {
+		p_order_id: orderId,
+		// The generated Args type has p_notes as a required `string` — it
+		// doesn't know the RPC itself normalizes null/blank to NULL, same
+		// cast pattern as createOrder() uses for the same reason.
+		p_notes: input.notes as string,
+		p_price_updates: input.priceUpdates.map((p) => ({
+			order_item_id: p.orderItemId,
+			price_at_order: p.priceAtOrder,
+		})) as unknown as Json,
+	});
+
+	if (error)
+	{
+		return { data: null, error };
+	}
+
+	const result = data as unknown as UpdateOrderDetailResult;
+	return { data: result, error: null };
+}

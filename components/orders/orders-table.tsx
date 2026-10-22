@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { listOrders, type ListOrdersResult, type OrderListItem } from "@/lib/supabase/queries";
+import { formatChannel } from "@/lib/format";
 import { OrderStatusBadge } from "@/components/orders/order-status-badge";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -15,11 +16,6 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-
-const CHANNEL_LABELS: Record<string, string> = {
-	whatsapp: "WhatsApp",
-	portal: "Portal",
-};
 
 function formatCreatedAt(iso: string): string
 {
@@ -88,7 +84,7 @@ export function OrdersTable({ initial }: { initial: ListOrdersResult })
 						<TableRow key={order.id}>
 							<TableCell className="font-medium">{order.customerName}</TableCell>
 							<TableCell><OrderStatusBadge status={order.status} /></TableCell>
-							<TableCell className="text-muted-foreground">{CHANNEL_LABELS[order.channel] ?? order.channel}</TableCell>
+							<TableCell className="text-muted-foreground">{formatChannel(order.channel)}</TableCell>
 							<TableCell className="text-right font-mono tabular-nums">{order.itemCount}</TableCell>
 							<TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">
 								{formatCreatedAt(order.createdAt)}

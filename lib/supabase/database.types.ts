@@ -96,6 +96,8 @@ export type Database = {
           id: string
           order_id: string
           price_at_order: number | null
+          price_overridden_at: string | null
+          price_overridden_by: string | null
           product_id: string
           quantity: number
           tenant_id: string
@@ -106,6 +108,8 @@ export type Database = {
           id?: string
           order_id: string
           price_at_order?: number | null
+          price_overridden_at?: string | null
+          price_overridden_by?: string | null
           product_id: string
           quantity: number
           tenant_id: string
@@ -116,6 +120,8 @@ export type Database = {
           id?: string
           order_id?: string
           price_at_order?: number | null
+          price_overridden_at?: string | null
+          price_overridden_by?: string | null
           product_id?: string
           quantity?: number
           tenant_id?: string
@@ -127,6 +133,13 @@ export type Database = {
             columns: ["order_id"]
             isOneToOne: false
             referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_price_overridden_by_fkey"
+            columns: ["price_overridden_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
           {
@@ -417,6 +430,10 @@ export type Database = {
         }
       }
       tenant_id: { Args: never; Returns: string }
+      update_order_detail: {
+        Args: { p_notes: string; p_order_id: string; p_price_updates: Json }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never

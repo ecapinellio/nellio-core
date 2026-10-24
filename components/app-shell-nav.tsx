@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { History, ListOrdered, PlusCircle } from "lucide-react";
+import { History, ListOrdered, PlusCircle, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isRouteAllowed } from "@/lib/rbac";
 
@@ -10,6 +10,7 @@ const navItems = [
 	{ href: "/orders/capture", label: "Capturar pedido", icon: PlusCircle },
 	{ href: "/orders", label: "Pedidos", icon: ListOrdered },
 	{ href: "/orders/historial", label: "Mis pedidos", icon: History },
+	{ href: "/admin/users", label: "Usuarios", icon: Users },
 ];
 
 // role is the JWT-sourced app_metadata.role (see app/(app)/layout.tsx and

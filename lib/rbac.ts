@@ -31,9 +31,13 @@ const ROUTE_RULES: readonly RouteRule[] = [
 	// after login even with no other route available yet.
 	{ prefix: "/", roles: ROLES },
 	{ prefix: "/orders", roles: ["admin", "operator"] },
+	// Reserved namespace for admin-only views ("Administración" row).
+	{ prefix: "/admin", roles: ["admin"] },
 ];
 
-const DEFAULT_ROLES: readonly Role[] = ["admin", "operator"];
+// Admin-only, not ["admin", "operator"]: the old default let an operator
+// reach any route nobody remembered to list (eng-review Decision 12).
+const DEFAULT_ROLES: readonly Role[] = ["admin"];
 
 function rolesFor(pathname: string): readonly Role[]
 {

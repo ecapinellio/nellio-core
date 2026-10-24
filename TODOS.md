@@ -129,6 +129,70 @@ for the full T8 plan and review report.
 **Depends on:** T8 (RLS role helpers + `role()`/`is_operator_or_admin()`) —
 already shipped, so this is unblocked whenever picked up.
 
+### Admin can deactivate users
+
+**What:** UI + action for an admin to deactivate an existing operator/driver
+(ban in `auth.users` or a soft-delete flag on `public.users` — not decided
+yet) without touching the database directly.
+
+**Why:** CLAUDE.md's "Vistas del frontend por rol" table lists this row as
+"Crear/Desactivar usuarios." The admin self-service user creation slice only
+builds the "Crear" half — deactivation needs its own view (a list of the
+tenant's existing users) and its own design decision (ban vs soft-delete),
+which would have doubled that slice's scope.
+
+**Context:** Split out during that slice's `/plan-eng-review` Step 0
+(2026-10-24) to keep creation and deactivation as separate, independently
+reviewable changes.
+
+**Effort:** M
+**Priority:** P3
+**Depends on:** Admin self-service user creation — reuses the `/admin/users`
+namespace and RBAC rule it introduces.
+
+### Admin can reset a user's password
+
+**What:** An admin-only Server Action that generates a new password for an
+existing operator/driver in the admin's own tenant (tenant check on the
+*target* user, not just the caller) and shows it once, same UX as creation.
+
+**Why:** Creation's "shown once" password has loss paths the leave-guard
+can't close: the browser Back button (App Router popstate fires no
+`beforeunload`), a dropped response after the user was already created,
+or the admin simply closing the tab and confirming. Today the only
+recovery is the founder running a script. One reset action covers every
+one of those paths instead of hardening each separately.
+
+**Context:** Raised by the `/review` adversarial pass on the admin user
+creation slice (2026-10-24). Chosen over intercepting popstate (fragile,
+coupled to Next's router internals).
+
+**Effort:** S
+**Priority:** P2
+**Depends on:** Admin self-service user creation. Pairs naturally with
+"Admin can deactivate users" (both need a list of the tenant's users).
+
+### Force password change on first login for admin-created users
+
+**What:** A `must_change_password` flag on `public.users`, checked at login
+and redirecting to a change-password form before the user can reach the app.
+
+**Why:** When an admin creates an operator/driver, the generated password is
+shown once in the UI — the admin knows it indefinitely unless the new user
+changes it themselves, and nothing today prompts them to.
+
+**Context:** Raised by the outside-voice review during the admin
+self-service user creation slice's `/plan-eng-review` (2026-10-24). Judged
+acceptable risk for the pilot's 2-3 users (random 24-byte generated
+password, communicated out of band) but worth fixing properly later —
+doing it right likely also wants an SMTP-backed reset flow, which this
+project doesn't have yet.
+
+**Effort:** M
+**Priority:** P3
+**Depends on:** Admin self-service user creation — this is the feature that
+starts handing out admin-known passwords in the first place.
+
 ## Product Catalog
 
 ### Dedicated product catalog page (candidate slice 6)

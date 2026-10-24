@@ -195,7 +195,9 @@ corren en paralelo sin pisarse.
 
 **Qué cubre hoy:** query helpers (`lib/supabase/queries.ts`), `create_order()`
 (validación + atomicidad), paginación de `listOrders()`, y la matriz completa
-de RLS por tenant+rol (4 tablas × 3 operaciones × 3 roles).
+de RLS por tenant+rol (4 tablas × 3 operaciones × 3 roles), las reglas de
+ruta de `lib/rbac.ts`, y la creación de usuarios por el admin
+(`createUserInTenant()` + Server Action de `/admin/users`, con rollback).
 
 **CI:** `.github/workflows/test.yml` corre la suite en cada push/PR contra un
 stack de Supabase local efímero (sin secrets — son las keys demo locales).

@@ -24,10 +24,14 @@
  * produce a fresh admin in a fresh tenant. --tenant-name is ignored when
  * --tenant-id is given.
  */
-import { randomBytes } from "node:crypto";
 import { parseArgs } from "node:util";
 import { createClient } from "@supabase/supabase-js";
+import { createUserInTenant } from "@/lib/users/create-user";
+import { isRole, type Role } from "@/lib/rbac";
 
+// Constructs its own client rather than lib/supabase/admin.ts's
+// createAdminClient() — that file is marked "server-only", which throws
+// outside Next's own bundler (including under tsx, which runs this script).
 function requireEnv(name: string): string
 {
 	const value = process.env[name];
@@ -38,22 +42,14 @@ function requireEnv(name: string): string
 	return value;
 }
 
-function generatePassword(): string
-{
-	return randomBytes(18).toString("base64url");
-}
-
-const VALID_ROLES = ["admin", "operator", "driver"] as const;
-type Role = (typeof VALID_ROLES)[number];
-
 function parseRole(value: string | undefined): Role
 {
 	const role = value ?? "admin";
-	if (!(VALID_ROLES as readonly string[]).includes(role))
+	if (!isRole(role))
 	{
-		throw new Error(`Invalid --role "${role}". Must be one of: ${VALID_ROLES.join(", ")}`);
+		throw new Error(`Invalid --role "${role}". Must be one of: admin, operator, driver`);
 	}
-	return role as Role;
+	return role;
 }
 
 async function main()
@@ -82,8 +78,6 @@ async function main()
 		);
 		process.exit(1);
 	}
-
-	const generatedPassword = values["admin-password"] ?? generatePassword();
 
 	const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
 	const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
@@ -120,33 +114,20 @@ async function main()
 	}
 
 	console.log(`Creating auth user for ${adminEmail} (role: ${role})...`);
-	const { data: authUser, error: authError } =
-		await supabaseAdmin.auth.admin.createUser({
-			email: adminEmail,
-			password: generatedPassword,
-			email_confirm: true,
-			app_metadata: {
-				tenant_id: tenantId,
-				role,
-			},
-		});
-
-	if (authError || !authUser.user)
-	{
-		throw new Error(`Failed to create auth user: ${authError?.message}`);
-	}
-
-	console.log("Creating users row...");
-	const { error: userRowError } = await supabaseAdmin.from("users").insert({
-		id: authUser.user.id,
-		tenant_id: tenantId,
-		name: adminName,
+	// createdBy: null — this is the bootstrap path, there's no calling admin
+	// (that's the whole reason this script exists).
+	const { data: created, error } = await createUserInTenant(supabaseAdmin, {
+		tenantId: tenantId!,
+		email: adminEmail!,
+		name: adminName!,
 		role,
+		createdBy: null,
+		password: values["admin-password"],
 	});
 
-	if (userRowError)
+	if (error || !created)
 	{
-		throw new Error(`Failed to create users row: ${userRowError.message}`);
+		throw new Error(`Failed to create user: ${error?.message}`);
 	}
 
 	console.log("\nDone.");
@@ -155,7 +136,7 @@ async function main()
 	console.log(`  Email:    ${adminEmail}`);
 	if (!values["admin-password"])
 	{
-		console.log(`  Password: ${generatedPassword}  (save this — shown once)`);
+		console.log(`  Password: ${created.password}  (save this — shown once)`);
 	}
 }
 

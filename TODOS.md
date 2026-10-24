@@ -176,6 +176,24 @@ coupled to Next's router internals).
 **Depends on:** Admin self-service user creation. Pairs naturally with
 "Admin can deactivate users" (both need a list of the tenant's users).
 
+### Audit trail for user deactivation (who/when)
+
+**What:** `deactivated_at` / `deactivated_by` on `public.users`, stamped by
+the deactivate/reactivate Server Actions and shown in the `/admin/users` list.
+
+**Why:** RBAC Slice 3 deactivates via a Supabase Auth ban only — the list
+shows *that* a user is deactivated (`banned_until`) but not who did it or
+when. Matters the first time someone asks "who locked me out?".
+
+**Context:** Deferred in RBAC Slice 3's `/plan-eng-review` (2026-10-24, D2-A)
+to keep one source of truth for status. If added, the ban stays the
+enforcement and these columns are audit-only — same habit as
+`price_overridden_by/at`.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** RBAC Slice 3 (user list + deactivate/reactivate).
+
 ### Force password change on first login for admin-created users
 
 **What:** A `must_change_password` flag on `public.users`, checked at login

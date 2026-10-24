@@ -550,3 +550,54 @@ export async function updateOrderDetail(
 	const result = data as unknown as UpdateOrderDetailResult;
 	return { data: result, error: null };
 }
+
+export interface TodayStats
+{
+	ordersToday: number;
+	pendingToday: number;
+	deliveredToday: number;
+	salesToday: number;
+	unpricedCount: number;
+}
+
+interface TodayStatsRow
+{
+	orders_today: number;
+	pending_today: number;
+	delivered_today: number;
+	sales_today: number;
+	unpriced_count: number;
+}
+
+/**
+ * Wraps the get_today_stats() RPC (S5a). dayStart/dayEnd are the CALLER's
+ * local day boundary (mirrors checkPendingDuplicateOrder()'s pattern) —
+ * this function doesn't compute "today" itself, so a server-rendered
+ * caller can't accidentally use the server's timezone instead of the
+ * viewer's.
+ */
+export async function getTodayStats(supabase: Client, dayStart: Date, dayEnd: Date): Promise<QueryResult<TodayStats>>
+{
+	const { data, error } = await supabase.rpc("get_today_stats", {
+		p_day_start: dayStart.toISOString(),
+		p_day_end: dayEnd.toISOString(),
+	});
+
+	if (error)
+	{
+		return { data: null, error };
+	}
+
+	const row = data as unknown as TodayStatsRow;
+
+	return {
+		data: {
+			ordersToday: row.orders_today,
+			pendingToday: row.pending_today,
+			deliveredToday: row.delivered_today,
+			salesToday: row.sales_today,
+			unpricedCount: row.unpriced_count,
+		},
+		error: null,
+	};
+}

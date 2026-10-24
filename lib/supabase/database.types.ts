@@ -351,6 +351,18 @@ export type Database = {
       }
       immutable_unaccent: { Args: { "": string }; Returns: string }
       is_operator_or_admin: { Args: never; Returns: boolean }
+      list_tenant_users: {
+        Args: never
+        Returns: {
+          banned_until: string
+          created_at: string
+          created_by: string
+          email: string
+          id: string
+          name: string
+          role: string
+        }[]
+      }
       quick_add_customer: {
         Args: { p_name: string }
         Returns: {

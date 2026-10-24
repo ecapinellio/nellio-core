@@ -54,7 +54,11 @@ function parseRole(value: string | undefined): Role
 
 async function main()
 {
+	// pnpm forwards the `--` from `pnpm bootstrap:admin -- --tenant-name ...`
+	// (the form the usage message documents) literally, and parseArgs
+	// rejects it as an unexpected positional.
 	const { values } = parseArgs({
+		args: process.argv.slice(2).filter((arg) => arg !== "--"),
 		options: {
 			"tenant-name": { type: "string" },
 			"tenant-id": { type: "string" },

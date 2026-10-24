@@ -96,7 +96,11 @@ flow shipping first — there's no real data to reconcile until then.
 
 ## Roles / RBAC
 
-### Admin self-service user creation (RBAC Slice 2)
+### ~~Admin self-service user creation (RBAC Slice 2)~~ — DONE
+
+**Shipped 2026-10-24** (`6e874ad`) as a Server Action, not the Edge Function
+described below — see the admin-user-creation eng review plan.
+
 
 **What:** A Supabase Edge Function running with the `service_role` key, plus a
 minimal admin UI form, so an admin can create operator/driver users without

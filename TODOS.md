@@ -2,6 +2,26 @@
 
 ## Order Management
 
+### Mobile app shell (sidebar doesn't collapse on phones)
+
+**What:** A mobile navigation pattern for the authenticated shell in
+`app/(app)/layout.tsx` — today the 208px sidebar is always visible.
+
+**Why:** At 375px the sidebar leaves ~170px for content and every page
+scrolls sideways (measured 2026-10-24: `/orders/historial` renders 446px wide
+in a 375px viewport). Page-level mobile layouts (e.g. `/admin/users`' stacked
+blocks from RBAC Slice 3) can't help while the shell eats half the screen.
+
+**Context:** Found during RBAC Slice 3's browser QA. Deferred because the
+pattern (hamburger drawer vs bottom bar vs top row) is an app-wide design
+decision — run `/plan-design-review` first. Drivers' delivery view will be
+phone-first, so this should land before that.
+
+**Effort:** M
+**Priority:** P2
+**Depends on:** Nothing. Should precede the driver delivery view and the
+mobile kanban TODO below.
+
 ### Mobile-friendly kanban board at /orders
 
 **What:** A deliberate mobile layout for the kanban board itself (columns,

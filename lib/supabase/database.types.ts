@@ -342,6 +342,10 @@ export type Database = {
         }
         Returns: Json
       }
+      get_today_stats: {
+        Args: { p_day_end: string; p_day_start: string }
+        Returns: Json
+      }
       immutable_unaccent: { Args: { "": string }; Returns: string }
       is_operator_or_admin: { Args: never; Returns: boolean }
       quick_add_customer: {

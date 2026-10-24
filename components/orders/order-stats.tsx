@@ -61,8 +61,15 @@ function Stat({ label, value, suffix }: StatProps)
  * a single staleness line for the whole row (Decision 3 — all 4 numbers
  * share one fetch timestamp), grid-cols-2 on mobile / grid-cols-4 above sm
  * (Decision 6).
+ *
+ * `refreshKey`: OrdersKanban is a sibling with its own data and no way to
+ * know this component exists, let alone that a save/status-move just
+ * happened — the parent (OrdersPageContent) bumps this prop whenever
+ * something changes that could affect these numbers, which re-runs the
+ * fetch effect below. Without it, "ventas"/"pendientes"/etc. only ever
+ * refreshed on a full page reload.
  */
-export function OrderStats()
+export function OrderStats({ refreshKey }: { refreshKey?: number } = {})
 {
 	const supabase = useMemo(() => createClient(), []);
 	const [stats, setStats] = useState<TodayStats | null>(null);
@@ -93,7 +100,7 @@ export function OrderStats()
 		{
 			active = false;
 		};
-	}, [supabase]);
+	}, [supabase, refreshKey]);
 
 	if (loadError)
 	{

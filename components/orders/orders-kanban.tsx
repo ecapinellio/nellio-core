@@ -95,12 +95,22 @@ function resolveTargetStatus(overId: string, orders: KanbanOrder[]): OrderStatus
 	return target && isOrderStatus(target.status) ? target.status : null;
 }
 
+interface OrdersKanbanProps
+{
+	/**
+	 * Fired after any change that could affect the stats dashboard (status
+	 * move or a dialog save) — OrderStats is a sibling with its own fetch,
+	 * it has no way to know this board just mutated data unless told.
+	 */
+	onOrderChanged?: () => void;
+}
+
 /**
  * Eng-review Decision 4: any column → any column, no transition validation.
  * RLS/role (T8) already gates WHO can move a card; the sequence they move
  * it in isn't enforced here.
  */
-export function OrdersKanban()
+export function OrdersKanban({ onOrderChanged }: OrdersKanbanProps)
 {
 	const supabase = useMemo(() => createClient(), []);
 	const [orders, setOrders] = useState<KanbanOrder[] | null>(null);
@@ -175,7 +185,9 @@ export function OrdersKanban()
 		{
 			setOrders(previous);
 			setActionError("No se pudo actualizar el pedido. Intenta de nuevo.");
+			return;
 		}
+		onOrderChanged?.();
 	}
 
 	function handleDragStart(event: DragStartEvent)
@@ -242,6 +254,7 @@ export function OrdersKanban()
 				{
 					setOpenOrderId(null);
 					refetchOrders();
+					onOrderChanged?.();
 				}}
 			/>
 		</div>

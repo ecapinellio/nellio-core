@@ -19,15 +19,18 @@ import { listOrdersForKanban, updateOrderStatus, type KanbanOrder } from "@/lib/
 import { ORDER_STATUSES, groupOrdersByStatus, isOrderStatus, type OrderStatus } from "@/lib/order-math";
 import { KanbanColumn } from "@/components/orders/kanban-column";
 import { OrderCard } from "@/components/orders/order-card";
+import { OrderDetailDialog } from "@/components/orders/order-detail-dialog";
 
 function SortableOrderCard({
 	order,
 	showConfirmButton,
 	onConfirm,
+	onOpenDetail,
 }: {
 	order: KanbanOrder;
 	showConfirmButton: boolean;
 	onConfirm: () => void;
+	onOpenDetail: () => void;
 })
 {
 	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: order.id });
@@ -38,6 +41,7 @@ function SortableOrderCard({
 			order={order}
 			showConfirmButton={showConfirmButton}
 			onConfirm={onConfirm}
+			onOpenDetail={onOpenDetail}
 			isDragging={isDragging}
 			style={{ transform: CSS.Transform.toString(transform), transition: transition ?? undefined }}
 			dragHandleProps={{ ...attributes, ...listeners }}
@@ -49,10 +53,12 @@ function DroppableColumn({
 	status,
 	orders,
 	onConfirm,
+	onOpenDetail,
 }: {
 	status: OrderStatus;
 	orders: KanbanOrder[];
 	onConfirm: (orderId: string) => void;
+	onOpenDetail: (orderId: string) => void;
 })
 {
 	const { setNodeRef, isOver } = useDroppable({ id: status });
@@ -66,6 +72,7 @@ function DroppableColumn({
 						order={order}
 						showConfirmButton={status === "pending"}
 						onConfirm={() => onConfirm(order.id)}
+						onOpenDetail={() => onOpenDetail(order.id)}
 					/>
 				))}
 			</SortableContext>
@@ -100,6 +107,7 @@ export function OrdersKanban()
 	const [loadError, setLoadError] = useState(false);
 	const [actionError, setActionError] = useState<string | null>(null);
 	const [activeId, setActiveId] = useState<string | null>(null);
+	const [openOrderId, setOpenOrderId] = useState<string | null>(null);
 
 	useEffect(() =>
 	{
@@ -130,6 +138,18 @@ export function OrdersKanban()
 
 	const groups = useMemo(() => groupOrdersByStatus(orders ?? []), [orders]);
 	const activeOrder = orders?.find((order) => order.id === activeId) ?? null;
+
+	/** Post-save refetch (eng-review Decision 6) — a full re-fetch, not an in-memory patch, since this is a deliberate low-frequency action, not a frequent drag. */
+	async function refetchOrders()
+	{
+		const { data, error } = await listOrdersForKanban(supabase);
+		if (error)
+		{
+			setActionError("No se pudieron actualizar los pedidos. Refrescá la página.");
+			return;
+		}
+		setOrders(data);
+	}
 
 	// Optimistic update, reverted on error (failure mode: network error
 	// mid-drag) — the operator sees the move happen immediately, not after
@@ -205,6 +225,7 @@ export function OrdersKanban()
 							status={status}
 							orders={groups[status]}
 							onConfirm={(orderId) => moveOrder(orderId, "confirmed")}
+							onOpenDetail={setOpenOrderId}
 						/>
 					))}
 				</div>
@@ -213,6 +234,16 @@ export function OrdersKanban()
 					{activeOrder ? <OrderCard order={activeOrder} isDragging /> : null}
 				</DragOverlay>
 			</DndContext>
+
+			<OrderDetailDialog
+				orderId={openOrderId}
+				onClose={() => setOpenOrderId(null)}
+				onSaved={() =>
+				{
+					setOpenOrderId(null);
+					refetchOrders();
+				}}
+			/>
 		</div>
 	);
 }

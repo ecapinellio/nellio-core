@@ -12,6 +12,8 @@ interface OrderCardProps
 	order: KanbanOrder;
 	showConfirmButton?: boolean;
 	onConfirm?: () => void;
+	/** Slice 4: click on the card body (not the grip handle, not Confirmar) opens the detail dialog. */
+	onOpenDetail?: () => void;
 	isDragging?: boolean;
 	style?: CSSProperties;
 	className?: string;
@@ -34,12 +36,13 @@ const MAX_VISIBLE_ITEMS = 3;
  * @dnd-kit's useSortable) is spread in by OrdersKanban (S3f), not imported
  * here, so this component has no @dnd-kit dependency of its own.
  *
- * No hover-elevate treatment on the card (design review, Decision 7): that
- * would read as "clickable to open a detail view", a feature that doesn't
- * exist until slice 4. The grip icon is the only drag affordance.
+ * No hover-elevate treatment on the card (design review, Decision 7): a
+ * card-wide hover-elevate would compete visually with the drag/Confirmar
+ * affordances. Slice 4's click-to-open-detail trigger is a plain onClick
+ * on the root, not a hover treatment.
  */
 export const OrderCard = forwardRef<HTMLDivElement, OrderCardProps>(function OrderCard(
-	{ order, showConfirmButton, onConfirm, isDragging, style, className, dragHandleProps },
+	{ order, showConfirmButton, onConfirm, onOpenDetail, isDragging, style, className, dragHandleProps },
 	ref,
 )
 {
@@ -54,6 +57,7 @@ export const OrderCard = forwardRef<HTMLDivElement, OrderCardProps>(function Ord
 		<div
 			ref={ref}
 			style={style}
+			onClick={onOpenDetail}
 			className={cn(
 				"flex flex-col gap-2 rounded-md border border-border bg-card p-3",
 				isDragging ? "opacity-50 shadow-md" : "shadow-none",
@@ -67,6 +71,7 @@ export const OrderCard = forwardRef<HTMLDivElement, OrderCardProps>(function Ord
 					aria-label="Arrastrar para mover"
 					className="touch-none cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
 					{...dragHandleProps}
+					onClick={(e) => e.stopPropagation()}
 				>
 					<GripVertical className="size-4" />
 				</button>
@@ -107,7 +112,15 @@ export const OrderCard = forwardRef<HTMLDivElement, OrderCardProps>(function Ord
 
 				{showConfirmButton
 					? (
-						<Button size="sm" className="h-7 px-2 text-xs" onClick={onConfirm}>
+						<Button
+							size="sm"
+							className="h-7 px-2 text-xs"
+							onClick={(e) =>
+							{
+								e.stopPropagation();
+								onConfirm?.();
+							}}
+						>
 							Confirmar
 						</Button>
 					)

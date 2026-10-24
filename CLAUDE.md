@@ -135,7 +135,21 @@ política RLS que filtre por `customer_id` (la política actual por `tenant_id`
 le daría a un cliente acceso a pedidos de otros clientes), y vínculo entre el
 login del cliente y su fila en `customers`.
 
----
+### ADR-009: Revocación de sesión dentro de `public.tenant_id()`
+**Decisión:** `tenant_id()` devuelve `NULL` si la sesión del JWT ya no existe
+en `auth.sessions` (se borra al cambiar la contraseña) o si el usuario está
+baneado (`banned_until > now()`). Desactivar = ban de Supabase Auth;
+reactivar = desbanear + contraseña nueva **en una sola llamada**.
+**Por qué:** un access token sigue siendo válido hasta que expira (1h). Sin
+esto, un usuario desactivado o con contraseña restablecida podía seguir
+leyendo y escribiendo vía la API REST esa hora. Como todas las políticas y
+RPCs pasan por `tenant_id()` (ADR-003), el chequeo en un solo lugar las cubre
+a todas. Reactivar cambia la contraseña porque un unban solo **revive** los
+refresh tokens congelados por el ban (verificado), p. ej. en un celular
+perdido.
+**Consecuencias:** las políticas usan `(select public.tenant_id())` para
+evaluarla una vez por consulta, no por fila. Toda política nueva debe usar la
+misma forma. `tenant_id()` es `security definer` (lee `auth.*`).
 
 ---
 
@@ -197,7 +211,9 @@ corren en paralelo sin pisarse.
 (validación + atomicidad), paginación de `listOrders()`, y la matriz completa
 de RLS por tenant+rol (4 tablas × 3 operaciones × 3 roles), las reglas de
 ruta de `lib/rbac.ts`, y la creación de usuarios por el admin
-(`createUserInTenant()` + Server Action de `/admin/users`, con rollback).
+(`createUserInTenant()` + Server Action de `/admin/users`, con rollback),
+la gestión de usuarios (restablecer/desactivar/reactivar, `list_tenant_users()`)
+y la revocación de sesión de `tenant_id()` (ADR-009).
 
 **CI:** `.github/workflows/test.yml` corre la suite en cada push/PR contra un
 stack de Supabase local efímero (sin secrets — son las keys demo locales).

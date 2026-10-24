@@ -133,7 +133,11 @@ for the full T8 plan and review report.
 **Depends on:** T8 (RLS role helpers + `role()`/`is_operator_or_admin()`) —
 already shipped, so this is unblocked whenever picked up.
 
-### Admin can deactivate users
+### ~~Admin can deactivate users~~ — DONE
+
+**Shipped 2026-10-24** in RBAC Slice 3 (user list, restore password,
+deactivate/reactivate at `/admin/users`).
+
 
 **What:** UI + action for an admin to deactivate an existing operator/driver
 (ban in `auth.users` or a soft-delete flag on `public.users` — not decided
@@ -154,7 +158,11 @@ reviewable changes.
 **Depends on:** Admin self-service user creation — reuses the `/admin/users`
 namespace and RBAC rule it introduces.
 
-### Admin can reset a user's password
+### ~~Admin can reset a user's password~~ — DONE
+
+**Shipped 2026-10-24** in RBAC Slice 3 (user list, restore password,
+deactivate/reactivate at `/admin/users`).
+
 
 **What:** An admin-only Server Action that generates a new password for an
 existing operator/driver in the admin's own tenant (tenant check on the

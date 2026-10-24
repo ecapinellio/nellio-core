@@ -45,6 +45,7 @@
   | Despachado | `#7C3AED` | `#F5F3FF` |
   | Entregado | `#059669` | `#ECFDF5` |
   | Duplicado / error | `#E11D48` | `#FFF1F2` |
+- **Semantic — estado de cuenta de usuario** (`/admin/users`): Activo `#059669` (mismo verde que Entregado; dark `#34D399`) · Desactivado zinc-400 `#A1A1AA` (dark zinc-500 `#71717A`). Tokens `--user-active` / `--user-inactive`. Mismo badge que los pedidos (componente compartido `components/status-badge.tsx`); filas desactivadas en `text-muted-foreground` y al final de la lista.
 - **Estilo de badge de estado:** borde izquierdo de 3px del color + punto + texto en negrita — NO un badge gris tenue. Debe leerse de reojo bajo presión de tiempo.
 - **Dark mode:** No es solo invertir. Superficies rediseñadas: `bg` → zinc-950, `surface` → zinc-900, `surface-raised` → zinc-800, bordes en zinc-800/700. Semánticos aclarados ~15% para mantener contraste 4.5:1 sobre fondo oscuro (ej. pending `#D97706` → `#FBBF24`, accent `#0F766E` → `#2DD4BF`). Sigue la preferencia del sistema operativo (`prefers-color-scheme`) con override manual persistido (claro/oscuro/sistema).
 
@@ -73,3 +74,4 @@ Preview HTML generado y aprobado: `/private/tmp/claude-501/-Users-emiliocarbonel
 |------|----------|-----------|
 | 2026-07-24 | Sistema de diseño inicial creado | Creado vía `/design-consultation`, basado en CLAUDE.md + research de Linear/shadcn + feedback del usuario. Memorable thing: claridad de estado bajo presión de tiempo. |
 | 2026-07-24 | shadcn/ui + Radix elegido sobre Radix "puro" | El usuario dudaba entre shadcn y Radix; son la misma pila en capas — shadcn da los patrones Combobox/Dialog que la pantalla de captura necesita, sin reinventar accesibilidad. |
+| 2026-10-24 | Estado de cuenta de usuario (Activo/Desactivado) reusa el badge de pedidos | `/plan-design-review` de RBAC Slice 3: el estado es lo que el admin escanea; mismo lenguaje visual que el resto de la app en vez de un badge nuevo. |

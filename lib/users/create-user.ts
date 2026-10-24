@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import type { Role } from "@/lib/rbac";
+import { BAN_FOREVER, UNBAN } from "@/lib/users/ban";
 
 type Client = SupabaseClient<Database>;
 
@@ -72,13 +73,12 @@ export async function createUserInTenant(
 	// Created banned and only unbanned once the users row exists: the JWT
 	// already carries tenant_id + role, and RLS trusts those claims, so an
 	// auth user left behind by a crash or a failed rollback below must not
-	// be able to sign in. ~100 years — GoTrue's duration format has no
-	// "forever"; the unban below lifts it with "none".
+	// be able to sign in.
 	const { data: authUser, error: authError } = await admin.auth.admin.createUser({
 		email: input.email,
 		password,
 		email_confirm: true,
-		ban_duration: "876000h",
+		ban_duration: BAN_FOREVER,
 		app_metadata: {
 			tenant_id: input.tenantId,
 			role: input.role,
@@ -100,7 +100,7 @@ export async function createUserInTenant(
 
 	const { error: unbanError } = insertError
 		? { error: null }
-		: await admin.auth.admin.updateUserById(authUser.user.id, { ban_duration: "none" });
+		: await admin.auth.admin.updateUserById(authUser.user.id, { ban_duration: UNBAN });
 
 	const failure = insertError ?? unbanError;
 	if (failure)

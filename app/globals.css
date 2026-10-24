@@ -85,6 +85,9 @@
   --status-dispatched-tint: #f5f3ff;
   --status-delivered: #059669;
   --status-delivered-tint: #ecfdf5;
+  /* User account status (RBAC slice 3) — reuses delivered green; inactive is zinc-400. */
+  --user-active: #059669;
+  --user-inactive: #a1a1aa;
   --chart-1: #0f766e;
   --chart-2: #0284c7;
   --chart-3: #7c3aed;
@@ -129,6 +132,8 @@
   --status-dispatched-tint: #2e1065;
   --status-delivered: #34d399;
   --status-delivered-tint: #022c22;
+  --user-active: #34d399;
+  --user-inactive: #71717a;
   --chart-1: #2dd4bf;
   --chart-2: #38bdf8;
   --chart-3: #a78bfa;

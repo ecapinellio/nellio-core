@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatChannel, formatOrderTimestamp } from "@/lib/format";
+import { formatChannel, formatDate, formatOrderTimestamp } from "@/lib/format";
 
 describe("formatOrderTimestamp", () =>
 {
@@ -27,5 +27,14 @@ describe("formatChannel", () =>
 	it("falls back to the raw value for an unrecognized channel", () =>
 	{
 		expect(formatChannel("carrier-pigeon")).toBe("carrier-pigeon");
+	});
+});
+
+describe("formatDate", () =>
+{
+	it("renders dd-mm-yyyy with padding and no time", () =>
+	{
+		const d = new Date(2026, 0, 5, 23, 59); // 5 Jan 2026, local
+		expect(formatDate(d.toISOString())).toBe("05-01-2026");
 	});
 });

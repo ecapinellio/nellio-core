@@ -13,6 +13,8 @@ type Client = SupabaseClient<Database>;
 // validates a real JWT against the local auth server.
 let caller: Client;
 vi.mock("server-only", () => ({}));
+// revalidatePath needs a Next request context; the list refresh is UI-only.
+vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => caller }));
 
 const { createOperatorOrDriver } = await import("@/app/(app)/admin/users/actions");

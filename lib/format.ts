@@ -13,6 +13,14 @@ export function formatOrderTimestamp(iso: string): string
 	return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
+/** dd-mm-yyyy, same order/padding as formatOrderTimestamp, for dates where the time adds nothing (e.g. when a user account was created). */
+export function formatDate(iso: string): string
+{
+	const d = new Date(iso);
+	const pad = (n: number) => String(n).padStart(2, "0");
+	return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`;
+}
+
 const CHANNEL_LABELS: Record<string, string> = {
 	whatsapp: "WhatsApp",
 	portal: "Portal",

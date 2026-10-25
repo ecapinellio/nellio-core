@@ -2,7 +2,12 @@
 
 ## Order Management
 
-### Mobile app shell (sidebar doesn't collapse on phones)
+### ~~Mobile app shell (sidebar doesn't collapse on phones)~~ — DONE
+
+**Done 2026-10-25:** below `md` the sidebar is replaced by a ☰ drawer
+(`components/mobile-nav.tsx`); no page scrolls sideways at 375px. Page-level
+layouts (e.g. the `/orders/historial` table, which now scrolls inside its own
+box) are still desktop-first.
 
 **What:** A mobile navigation pattern for the authenticated shell in
 `app/(app)/layout.tsx` — today the 208px sidebar is always visible.

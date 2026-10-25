@@ -15,7 +15,18 @@ const navItems = [
 
 // role is the JWT-sourced app_metadata.role (see app/(app)/layout.tsx and
 // lib/rbac.ts Decision 10) — never the users table column.
-export function AppShellNav({ role }: { role: string | null | undefined })
+//
+// "drawer" is the phone menu (components/mobile-nav.tsx): 44px rows so each
+// item is a comfortable thumb target, and onNavigate closes the drawer.
+export function AppShellNav({
+	role,
+	variant = "sidebar",
+	onNavigate,
+}: {
+	role: string | null | undefined;
+	variant?: "sidebar" | "drawer";
+	onNavigate?: () => void;
+})
 {
 	const pathname = usePathname();
 	const visibleItems = navItems.filter(({ href }) => isRouteAllowed(href, role));
@@ -29,12 +40,15 @@ export function AppShellNav({ role }: { role: string | null | undefined })
 					<Link
 						key={href}
 						href={href}
+						onClick={onNavigate}
+						aria-current={active ? "page" : undefined}
 						className={cn(
-							"flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium",
+							"flex items-center gap-2 rounded-md px-2 text-sm font-medium",
+							variant === "drawer" ? "h-11" : "py-1.5",
 							active ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted",
 						)}
 					>
-						<Icon className="size-3.5" />
+						<Icon className={variant === "drawer" ? "size-4" : "size-3.5"} />
 						{label}
 					</Link>
 				);

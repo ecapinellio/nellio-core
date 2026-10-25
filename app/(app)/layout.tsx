@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/lib/auth/actions";
 import { Button } from "@/components/ui/button";
 import { AppShellNav } from "@/components/app-shell-nav";
+import { MobileNav } from "@/components/mobile-nav";
 
 export default async function AppLayout({ children }: { children: React.ReactNode })
 {
@@ -25,31 +26,41 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 		.eq("id", user.id)
 		.single();
 
+	const role = user.app_metadata.role;
+	const tenantName = profile?.tenants?.name ?? "—";
+	const userName = profile?.name ?? user.email ?? "";
+
+	// Below md the sidebar is replaced by MobileNav's drawer, so content gets
+	// the full phone width (DESIGN.md — Shell).
 	return (
 		<div className="flex min-h-screen">
-			<aside className="flex w-52 shrink-0 flex-col border-r border-border bg-card p-2">
+			<aside className="hidden w-52 shrink-0 flex-col border-r border-border bg-card p-2 md:flex">
 				<div className="flex items-center px-2 pb-4 pt-1 text-sm font-bold tracking-tight">
 					<span className="mr-2 inline-block size-1.5 rounded-full bg-primary" />
 					Nellio Core
 				</div>
-				<AppShellNav role={user.app_metadata.role} />
+				<AppShellNav role={role} />
 			</aside>
 
 			<div className="flex min-w-0 flex-1 flex-col">
-				<header className="flex h-13 items-center justify-between border-b border-border px-6">
-					<div className="text-sm text-muted-foreground">{profile?.tenants?.name ?? "—"}</div>
+				<header className="flex h-13 items-center justify-between gap-2 border-b border-border pl-1 pr-2 md:px-6">
+					<div className="flex min-w-0 items-center gap-1">
+						<MobileNav role={role} tenantName={tenantName} userName={userName} />
+						<span className="text-sm font-bold tracking-tight md:hidden">Nellio Core</span>
+						<span className="hidden text-sm text-muted-foreground md:inline">{tenantName}</span>
+					</div>
 					<div className="flex items-center gap-3">
-						<span className="text-sm text-muted-foreground">{profile?.name ?? user.email}</span>
+						<span className="hidden text-sm text-muted-foreground md:inline">{userName}</span>
 						<form action={logout}>
-							<Button type="submit" variant="ghost" size="sm">
+							<Button type="submit" variant="ghost" size="sm" className="max-md:size-11" aria-label="Cerrar sesión">
 								<LogOut />
-								Cerrar sesión
+								<span className="hidden md:inline">Cerrar sesión</span>
 							</Button>
 						</form>
 					</div>
 				</header>
 
-				<main className="flex-1 bg-background p-6">{children}</main>
+				<main className="flex-1 bg-background p-4 md:p-6">{children}</main>
 			</div>
 		</div>
 	);

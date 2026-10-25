@@ -56,7 +56,7 @@
 
 ## Layout
 - **Approach:** Grid-disciplined — columnas estrictas, alineación predecible. Sirve directo al mandato de claridad.
-- **Shell:** Sidebar fijo (208px) + topbar (52px) para vistas autenticadas. Login usa panel dividido: mitad oscura (zinc-900, fija — no depende del theme, funciona como firma de marca) + formulario minimalista.
+- **Shell:** Sidebar fijo (208px) + topbar (52px) para vistas autenticadas. Bajo `md` (768px) el sidebar se oculta: botón ☰ en el topbar abre el mismo menú en un panel lateral (Sheet, desde la izquierda, filas de 44px); el usuario y el tenant van al pie del panel y "Cerrar sesión" queda como ícono. Login usa panel dividido: mitad oscura (zinc-900, fija — no depende del theme, funciona como firma de marca) + formulario minimalista.
 - **Max content width:** 1280px en vistas de tabla/lista; 480-560px en formularios y diálogos.
 - **Border radius:** sm 4px (inputs, badges) · md 6px (botones, cards) · lg 8px (paneles, diálogos) · full 9999px (avatar, punto de estado).
 - **Shadows:** planas, sin gradientes ni sombras suaves grandes. `shadow-sm`/`shadow-md` sutiles para elevación de superficie; `shadow-lg` solo en modales/frames.
@@ -74,4 +74,5 @@ Preview HTML generado y aprobado: `/private/tmp/claude-501/-Users-emiliocarbonel
 |------|----------|-----------|
 | 2026-07-24 | Sistema de diseño inicial creado | Creado vía `/design-consultation`, basado en CLAUDE.md + research de Linear/shadcn + feedback del usuario. Memorable thing: claridad de estado bajo presión de tiempo. |
 | 2026-07-24 | shadcn/ui + Radix elegido sobre Radix "puro" | El usuario dudaba entre shadcn y Radix; son la misma pila en capas — shadcn da los patrones Combobox/Dialog que la pantalla de captura necesita, sin reinventar accesibilidad. |
+| 2026-10-25 | Menú móvil: botón ☰ + panel lateral (no barra de pestañas abajo) | En 375px el sidebar fijo dejaba ~170px de contenido. El panel reusa el mismo menú y escala si se agregan secciones; una barra inferior solo admite 4-5. |
 | 2026-10-24 | Estado de cuenta de usuario (Activo/Desactivado) reusa el badge de pedidos | `/plan-design-review` de RBAC Slice 3: el estado es lo que el admin escanea; mismo lenguaje visual que el resto de la app en vez de un badge nuevo. |

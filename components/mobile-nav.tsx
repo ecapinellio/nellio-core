@@ -38,7 +38,7 @@ export function MobileNav({
 					<Menu />
 				</Button>
 			</SheetTrigger>
-			<SheetContent side="left" className="w-64 gap-0 p-2" showCloseButton={false}>
+			<SheetContent side="left" className="gap-0 p-2">
 				<SheetHeader className="px-2 pb-4 pt-3">
 					<SheetTitle className="flex items-center text-sm font-bold tracking-tight">
 						<span className="mr-2 inline-block size-1.5 rounded-full bg-primary" />

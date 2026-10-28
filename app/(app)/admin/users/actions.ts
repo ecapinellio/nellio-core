@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createUserInTenant, generatePassword } from "@/lib/users/create-user";
 import { BAN_FOREVER, UNBAN, isBanned } from "@/lib/users/ban";
+import { mustChangePassword } from "@/lib/auth/password";
 
 export type CreatableRole = "operator" | "driver";
 
@@ -66,7 +67,9 @@ async function requireAdmin(): Promise<AdminCaller | null>
 	const supabase = await createClient();
 	const { data: { user } } = await supabase.auth.getUser();
 
-	if (!user || user.app_metadata.role !== "admin")
+	// A caller still on an admin-generated password must set their own
+	// first — the proxy redirects them, this is the backend half (ADR-006).
+	if (!user || user.app_metadata.role !== "admin" || mustChangePassword(user))
 	{
 		return null;
 	}
@@ -210,7 +213,7 @@ export async function resetUserPassword(userId: string): Promise<ActionResult<Cr
 	}
 
 	const password = generatePassword();
-	const { error } = await admin.auth.admin.updateUserById(target.id, { password });
+	const { error } = await admin.auth.admin.updateUserById(target.id, { password, app_metadata: { must_change_password: true } });
 	if (error)
 	{
 		return { data: null, error: "No se pudo restablecer la contraseña. Intenta de nuevo." };
@@ -271,7 +274,11 @@ export async function reactivateUser(userId: string): Promise<ActionResult<Crede
 	}
 
 	const password = generatePassword();
-	const { error } = await admin.auth.admin.updateUserById(target.id, { ban_duration: UNBAN, password });
+	const { error } = await admin.auth.admin.updateUserById(target.id, {
+		ban_duration: UNBAN,
+		password,
+		app_metadata: { must_change_password: true },
+	});
 	if (error)
 	{
 		return { data: null, error: "No se pudo reactivar. Intenta de nuevo." };

@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Menu } from "lucide-react";
+import Link from "next/link";
+import { KeyRound, Menu } from "lucide-react";
 import { AppShellNav } from "@/components/app-shell-nav";
+import { PASSWORD_PATH } from "@/lib/auth/password";
 import { Button } from "@/components/ui/button";
 import {
 	Sheet,
@@ -50,6 +52,14 @@ export function MobileNav({
 				<SheetFooter className="gap-0.5 border-t border-border px-2 pt-3">
 					<div className="text-sm font-medium">{userName}</div>
 					<div className="text-sm text-muted-foreground">{tenantName}</div>
+					<Link
+						href={PASSWORD_PATH}
+						onClick={() => setOpen(false)}
+						className="-mx-2 mt-1 flex h-11 items-center gap-2 rounded-md px-2 text-sm font-medium text-muted-foreground hover:bg-muted"
+					>
+						<KeyRound className="size-4" />
+						Cambiar contraseña
+					</Link>
 				</SheetFooter>
 			</SheetContent>
 		</Sheet>

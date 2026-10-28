@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { saveProductsRpc, type SaveConflict } from "@/lib/products/catalog";
+import { mustChangePassword } from "@/lib/auth/password";
 import { saveRowError, MAX_SAVE_ROWS, type SaveRow } from "@/lib/products/grid";
 
 export type SaveProductsResult =
@@ -25,7 +26,7 @@ export async function saveProducts(rows: SaveRow[]): Promise<SaveProductsResult>
 	const supabase = await createClient();
 	const { data: { user } } = await supabase.auth.getUser();
 	const role = user?.app_metadata.role;
-	if (!user || (role !== "admin" && role !== "operator"))
+	if (!user || (role !== "admin" && role !== "operator") || mustChangePassword(user))
 	{
 		return { status: "error", error: UNAUTHORIZED };
 	}

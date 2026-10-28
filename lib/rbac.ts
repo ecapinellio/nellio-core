@@ -31,6 +31,8 @@ const ROUTE_RULES: readonly RouteRule[] = [
 	// after login even with no other route available yet.
 	{ prefix: "/", roles: ROLES },
 	{ prefix: "/orders", roles: ["admin", "operator"] },
+	// Own account (change password): everyone, it's about yourself.
+	{ prefix: "/account", roles: ROLES },
 	// Catalog: same roles as the products RLS policies.
 	{ prefix: "/products", roles: ["admin", "operator"] },
 	// Reserved namespace for admin-only views ("Administración" row).

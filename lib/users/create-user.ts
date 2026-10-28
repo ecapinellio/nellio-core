@@ -82,6 +82,10 @@ export async function createUserInTenant(
 		app_metadata: {
 			tenant_id: input.tenantId,
 			role: input.role,
+			// A generated password was seen by whoever created the user, so
+			// the person must replace it on first login. A password passed in
+			// explicitly (bootstrap script) was chosen by its owner.
+			must_change_password: input.password === undefined,
 		},
 	});
 

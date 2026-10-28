@@ -1,10 +1,12 @@
 import { redirect } from "next/navigation";
-import { LogOut } from "lucide-react";
+import Link from "next/link";
+import { KeyRound, LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/lib/auth/actions";
 import { Button } from "@/components/ui/button";
 import { AppShellNav } from "@/components/app-shell-nav";
 import { MobileNav } from "@/components/mobile-nav";
+import { PASSWORD_PATH } from "@/lib/auth/password";
 
 export default async function AppLayout({ children }: { children: React.ReactNode })
 {
@@ -51,6 +53,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 					</div>
 					<div className="flex items-center gap-3">
 						<span className="hidden text-sm text-muted-foreground md:inline">{userName}</span>
+						<Button asChild variant="ghost" size="icon-sm" className="hidden md:inline-flex" title="Cambiar contraseña">
+							<Link href={PASSWORD_PATH} aria-label="Cambiar contraseña">
+								<KeyRound />
+							</Link>
+						</Button>
 						<form action={logout} data-leave-guard>
 							<Button type="submit" variant="ghost" size="sm" className="max-md:size-11" aria-label="Cerrar sesión">
 								<LogOut />

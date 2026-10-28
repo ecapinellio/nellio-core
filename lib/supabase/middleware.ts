@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isRouteAllowed } from "@/lib/rbac";
+import { PASSWORD_PATH, mustChangePassword } from "@/lib/auth/password";
 
 const PUBLIC_PATHS = ["/login"];
 
@@ -50,6 +51,17 @@ export async function updateSession(request: NextRequest)
 		homeUrl.pathname = "/";
 		homeUrl.search = "";
 		return copyCookies(supabaseResponse, NextResponse.redirect(homeUrl));
+	}
+
+	// Still on an admin-generated password: nowhere but the change-password
+	// page. getUser() reads app_metadata from Auth, so the flag clears here
+	// the moment changePassword() does, not when the JWT next refreshes.
+	if (user && mustChangePassword(user) && request.nextUrl.pathname !== PASSWORD_PATH)
+	{
+		const passwordUrl = request.nextUrl.clone();
+		passwordUrl.pathname = PASSWORD_PATH;
+		passwordUrl.search = "";
+		return copyCookies(supabaseResponse, NextResponse.redirect(passwordUrl));
 	}
 
 	// Role gate (ADR-006): "/" is always allowed (see lib/rbac.ts), so this

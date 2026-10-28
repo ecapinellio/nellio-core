@@ -59,6 +59,27 @@ create unique index products_tenant_name_uniq
   on public.products (tenant_id, public.normalize_product_name(name));
 
 -- ============================================================
+-- Tenant-scoped foreign keys (/review finding)
+-- ============================================================
+-- A plain FK ignores RLS, so an operator inserting/updating directly through
+-- PostgREST could point an order line at another tenant's product (or an
+-- order at another tenant's customer) just by knowing its id. Composite FKs
+-- make "same tenant" a constraint the database enforces on every path.
+alter table public.products
+  add constraint products_tenant_id_id_key unique (tenant_id, id);
+alter table public.order_items
+  drop constraint order_items_product_id_fkey,
+  add constraint order_items_product_tenant_fkey
+    foreign key (tenant_id, product_id) references public.products (tenant_id, id) on delete restrict;
+
+alter table public.customers
+  add constraint customers_tenant_id_id_key unique (tenant_id, id);
+alter table public.orders
+  drop constraint orders_customer_id_fkey,
+  add constraint orders_customer_tenant_fkey
+    foreign key (tenant_id, customer_id) references public.customers (tenant_id, id) on delete restrict;
+
+-- ============================================================
 -- Last editor (outside voice #2)
 -- ============================================================
 -- A trigger, not the RPCs: capture's updateProductPricing() PATCHes the
@@ -81,11 +102,11 @@ create trigger products_set_updated_by
 -- ============================================================
 -- Inactive products can't be ordered (D3 + outside voice #3)
 -- ============================================================
--- On order_items, not in create_order(): operators also have a direct
--- insert policy on order_items (role_rbac.sql). security invoker on
--- purpose — a product outside the caller's tenant is invisible here, so
--- this never leaks another tenant's product name; create_order() and the
--- FK reject that case on their own.
+-- On order_items, not in create_order(): operators also have direct
+-- insert/update policies on order_items (role_rbac.sql). security invoker
+-- on purpose — a product outside the caller's tenant is invisible here, so
+-- this never leaks another tenant's product name; the composite FK above
+-- rejects a foreign product_id outright.
 create or replace function public.reject_inactive_product()
 returns trigger
 language plpgsql
@@ -107,7 +128,7 @@ end;
 $$;
 
 create trigger order_items_reject_inactive_product
-  before insert on public.order_items
+  before insert or update of product_id on public.order_items
   for each row execute function public.reject_inactive_product();
 
 -- ============================================================
@@ -260,6 +281,11 @@ begin
       raise exception 'El precio de "%" debe ser mayor que cero.', v_name using errcode = '22003';
     end if;
 
+    -- numeric(10,2): reject instead of silently rounding or overflowing.
+    if v_price is not null and (v_price > 99999999.99 or v_price <> round(v_price, 2)) then
+      raise exception 'El precio de "%" no es válido (máximo 99,999,999.99 y 2 decimales).', v_name using errcode = '22003';
+    end if;
+
     if v_unit is not null and v_unit not in ('ton', 'kg', 'lb', 'l', 'gal', 'each') then
       raise exception 'La unidad de "%" no es válida.', v_name using errcode = '22023';
     end if;
@@ -269,9 +295,13 @@ begin
         raise exception 'Falta el precio o la unidad de "%".', v_name using errcode = '22004';
       end if;
     else
+      -- for update: a concurrent save of the same row waits here, then sees
+      -- the new updated_at and reports a conflict instead of silently
+      -- overwriting it (review: lost update between check and write).
       select * into v_current
       from public.products p
-      where p.id = v_id and p.tenant_id = v_tenant_id;
+      where p.id = v_id and p.tenant_id = v_tenant_id
+      for update;
 
       if not found then
         raise exception 'Producto no encontrado.' using errcode = 'P0002';
@@ -303,28 +333,28 @@ begin
 
   -- 3. Readable duplicate check (the unique index stays the real guard):
   -- within the batch, and against catalog rows the batch doesn't touch.
-  select string_agg(distinct n.name, ', ')
-  into v_dupes
-  from (
+  -- Normalize each row once and group — a per-row correlated count was
+  -- O(n²) and blew the 8s statement timeout at 1000 rows.
+  with batch as (
     select btrim(r->>'name') as name,
       public.normalize_product_name(r->>'name') as norm,
       nullif(r->>'id', '')::uuid as id
     from jsonb_array_elements(p_rows) r
-  ) n
-  where (
-    select count(*) from jsonb_array_elements(p_rows) r2
-    where public.normalize_product_name(r2->>'name') = n.norm
-  ) > 1
-  or exists (
-    select 1 from public.products p
-    where p.tenant_id = v_tenant_id
-      and public.normalize_product_name(p.name) = n.norm
-      and p.id is distinct from n.id
-      and not exists (
-        select 1 from jsonb_array_elements(p_rows) r3
-        where nullif(r3->>'id', '')::uuid = p.id
-      )
-  );
+  ),
+  repeated as (
+    select norm from batch group by norm having count(*) > 1
+  )
+  select string_agg(distinct b.name, ', ')
+  into v_dupes
+  from batch b
+  where b.norm in (select norm from repeated)
+    or exists (
+      select 1 from public.products p
+      where p.tenant_id = v_tenant_id
+        and public.normalize_product_name(p.name) = b.norm
+        and p.id is distinct from b.id
+        and not exists (select 1 from batch b2 where b2.id = p.id)
+    );
 
   if v_dupes is not null then
     raise exception 'Ya existe: %', v_dupes using errcode = '23505';

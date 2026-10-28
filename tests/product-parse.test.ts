@@ -60,6 +60,8 @@ describe("parsePrice() — El Salvador format, never guesses (D6)", () =>
 		expect(parsePrice("0")).toEqual({ ok: false, reason: "nonpositive" });
 		expect(parsePrice("-3")).toEqual({ ok: false, reason: "nonpositive" });
 		expect(parsePrice("12.5555")).toEqual({ ok: false, reason: "decimals" });
+		expect(parsePrice("123456789")).toEqual({ ok: false, reason: "toolarge" });
+		expect(parsePrice("99,999,999.99")).toEqual({ ok: true, value: 99999999.99 });
 	});
 
 	it("explains each error in Spanish", () =>

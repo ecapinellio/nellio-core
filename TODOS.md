@@ -285,6 +285,24 @@ prices with or without IVA (13%)?
 **Priority:** P1 — blocks loading ECTEC's catalog in production.
 **Depends on:** ECTEC's product Excel.
 
+### Leave guard doesn't cover browser back/forward
+
+**What:** Warn before the browser's back/forward button discards unsaved
+edits on `/products` (and the one-time password dialog).
+
+**Why:** `hooks/use-leave-guard.ts` covers tab close/reload, in-app links
+and `data-leave-guard` forms, but App Router back/forward is a client-side
+`popstate` navigation that neither fires `beforeunload` nor can be blocked
+with a standard API.
+
+**Context:** Found by the adversarial pass of `/review` on the product
+catalog (2026-10-28). Known approaches (sentinel history entry + `popstate`)
+are fragile; revisit if Next.js ships a navigation-blocking API.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Nothing.
+
 ### Virtualize the catalog grid for very large catalogs (>1000 products)
 
 **What:** Render only the visible rows of `/products`' grid.

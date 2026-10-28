@@ -18,12 +18,14 @@ export function ProductEditSheet({
 	row,
 	duplicate,
 	saving,
+	error,
 	onSave,
 	onClose,
 }: {
 	row: GridRow | null;
 	duplicate: (name: string, key: string) => string | undefined;
 	saving: boolean;
+	error: string | null;
 	onSave: (row: GridRow) => void;
 	onClose: () => void;
 })
@@ -31,7 +33,7 @@ export function ProductEditSheet({
 	return (
 		<Sheet open={row !== null} onOpenChange={(open) => { if (!open && !saving) onClose(); }}>
 			<SheetContent side="bottom" className="max-h-[90vh] gap-0 overflow-y-auto">
-				{row ? <EditForm key={row.key} row={row} duplicate={duplicate} saving={saving} onSave={onSave} /> : null}
+				{row ? <EditForm key={row.key} row={row} duplicate={duplicate} saving={saving} error={error} onSave={onSave} /> : null}
 			</SheetContent>
 		</Sheet>
 	);
@@ -41,11 +43,13 @@ function EditForm({
 	row,
 	duplicate,
 	saving,
+	error,
 	onSave,
 }: {
 	row: GridRow;
 	duplicate: (name: string, key: string) => string | undefined;
 	saving: boolean;
+	error: string | null;
 	onSave: (row: GridRow) => void;
 })
 {
@@ -112,6 +116,7 @@ function EditForm({
 					: null}
 			</div>
 			<SheetFooter>
+				{error ? <p role="alert" className="text-sm font-medium text-destructive">{error}</p> : null}
 				<Button type="submit" className="h-11" disabled={saving}>
 					{saving ? <><Loader2 className="animate-spin" />Guardando…</> : "Guardar"}
 				</Button>

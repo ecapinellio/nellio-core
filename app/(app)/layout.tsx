@@ -51,7 +51,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 					</div>
 					<div className="flex items-center gap-3">
 						<span className="hidden text-sm text-muted-foreground md:inline">{userName}</span>
-						<form action={logout}>
+						<form action={logout} data-leave-guard>
 							<Button type="submit" variant="ghost" size="sm" className="max-md:size-11" aria-label="Cerrar sesión">
 								<LogOut />
 								<span className="hidden md:inline">Cerrar sesión</span>

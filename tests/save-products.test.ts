@@ -112,6 +112,27 @@ describe("product catalog: save_products(), deactivation, duplicates", () =>
 			expect((await product(otherTenant.admin, foreign)).price_per_unit).toBe(10);
 		});
 
+		it("two simultaneous saves of the same row: one wins, the other gets a conflict (no lost update)", async () =>
+		{
+			const name = unique("Race");
+			await saveProductsRpc(tenant.admin, [newRow(name)]);
+			const p = await product(tenant.admin, name);
+			const edit = (price: number) => ({ id: p.id, name, price_per_unit: price, unit: "kg" as const, active: true, updated_at: p.updated_at });
+
+			const [a, b] = await Promise.all([saveProductsRpc(tenant.admin, [edit(20)]), saveProductsRpc(tenant.operator, [edit(30)])]);
+			const results = [a.data!, b.data!];
+			expect(results.filter((r) => r.saved === 1)).toHaveLength(1);
+			expect(results.filter((r) => r.conflicts.length === 1)).toHaveLength(1);
+			const winner = a.data!.saved === 1 ? 20 : 30;
+			expect((await product(tenant.admin, name)).price_per_unit).toBe(winner);
+		});
+
+		it("rejects prices numeric(10,2) can't hold instead of rounding or overflowing", async () =>
+		{
+			expect((await saveProductsRpc(tenant.operator, [newRow(unique("Huge"), 123456789)])).error?.message).toContain("no es válido");
+			expect((await saveProductsRpc(tenant.operator, [newRow(unique("Tiny"), 1.005)])).error?.message).toContain("no es válido");
+		});
+
 		it("rejects a driver", async () =>
 		{
 			const { error } = await saveProductsRpc(tenant.driver, [newRow(unique("Driver"))]);
@@ -161,6 +182,16 @@ describe("product catalog: save_products(), deactivation, duplicates", () =>
 			const inBatch = await saveProductsRpc(tenant.operator, [newRow(unique("Ácido")), newRow(`Acido ${n}`)]);
 			expect(inBatch.error?.code).toBe("23505");
 		});
+
+		// Regression: the duplicate check was O(n²) and hit Supabase's 8s
+		// statement timeout for the `authenticated` role at 1000 rows.
+		it("saves a full 1000-row batch within the statement timeout", async () =>
+		{
+			const rows = Array.from({ length: 1000 }, (_, i) => newRow(`${unique("Lote")} ítem ${i}`));
+			const { data, error } = await saveProductsRpc(tenant.operator, rows);
+			expect(error).toBeNull();
+			expect(data!.saved).toBe(1000);
+		}, 30_000);
 
 		it("caps a save at 1000 rows", async () =>
 		{
@@ -231,13 +262,46 @@ describe("product catalog: save_products(), deactivation, duplicates", () =>
 			const direct = await tenant.operator.from("order_items").insert({ order_id: oldOrder!.order.id, product_id: p.id, quantity: 2, tenant_id: tenant.tenantId });
 			expect(direct.error?.message).toContain("ya no está activo");
 
-			const { data: items } = await tenant.operator.from("order_items").select("product_id").eq("order_id", oldOrder!.order.id);
-			expect(items).toEqual([{ product_id: p.id }]);
+			// The old order still shows the retired product, and edits that don't
+			// touch product_id still work on it.
+			const { data: line } = await tenant.operator.from("order_items").select("id, product_id").eq("order_id", oldOrder!.order.id).single();
+			expect(line!.product_id).toBe(p.id);
+			expect((await tenant.operator.from("order_items").update({ quantity: 3 }).eq("id", line!.id)).error).toBeNull();
+
+			// Repointing a line at the retired product is blocked too.
+			const { data: active } = await quickAddProduct(tenant.operator, unique("Still active"));
+			const { data: otherOrder } = await createOrder(tenant.operator, {
+				customer_id: customer!.id, notes: null, channel: "whatsapp", items: [{ product_id: active!.id, quantity: 1 }],
+			});
+			const { data: otherLine } = await tenant.operator.from("order_items").select("id").eq("order_id", otherOrder!.order.id).single();
+			const repoint = await tenant.operator.from("order_items").update({ product_id: p.id }).eq("id", otherLine!.id);
+			expect(repoint.error?.message).toContain("ya no está activo");
 
 			// Reactivate → searchable again.
 			const inactive = await product(tenant.operator, name);
 			await saveProductsRpc(tenant.operator, [{ id: p.id, name, price_per_unit: 10, unit: "kg", active: true, updated_at: inactive.updated_at }]);
 			expect((await searchProducts(tenant.operator, name)).data!.map((x) => x.id)).toContain(p.id);
+		});
+	});
+
+	describe("tenant-scoped foreign keys", () =>
+	{
+		it("rejects an order line pointing at another tenant's product, and an order at another tenant's customer", async () =>
+		{
+			const { data: foreignProduct } = await quickAddProduct(otherTenant.operator, unique("Foreign product"));
+			const { data: foreignCustomer } = await quickAddCustomer(otherTenant.operator, unique("Foreign customer"));
+			const { data: mine } = await quickAddProduct(tenant.operator, unique("Mine"));
+			const { data: customer } = await quickAddCustomer(tenant.operator, unique("My customer"));
+			const { data: order } = await createOrder(tenant.operator, {
+				customer_id: customer!.id, notes: null, channel: "whatsapp", items: [{ product_id: mine!.id, quantity: 1 }],
+			});
+
+			const line = await tenant.operator.from("order_items")
+				.insert({ order_id: order!.order.id, product_id: foreignProduct!.id, quantity: 1, tenant_id: tenant.tenantId });
+			expect(line.error?.code).toBe("23503");
+
+			const repointed = await tenant.operator.from("orders").update({ customer_id: foreignCustomer!.id }).eq("id", order!.order.id);
+			expect(repointed.error?.code).toBe("23503");
 		});
 	});
 
@@ -270,6 +334,7 @@ describe("product catalog: save_products(), deactivation, duplicates", () =>
 
 		it("re-validates rows the grid would have blocked", async () =>
 		{
+			expect(await saveProducts([newRow(unique("Big"), 100_000_000)])).toMatchObject({ status: "error", error: expect.stringContaining("no es válido") });
 			expect(await saveProducts([newRow(unique("Neg"), -5)])).toMatchObject({ status: "error", error: expect.stringContaining("mayor que cero") });
 			expect(await saveProducts([{ ...newRow(unique("Unit")), unit: "saco" as SaveRow["unit"] }])).toMatchObject({ status: "error", error: expect.stringContaining("no es válida") });
 			expect(await saveProducts([])).toMatchObject({ status: "error" });

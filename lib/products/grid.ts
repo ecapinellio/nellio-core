@@ -8,7 +8,7 @@
  *                                          ▼
  *                                 toSavePayload() (dirty rows only) ──▶ save_products()
  */
-import { parsePrice, priceErrorMessage } from "@/lib/products/parse";
+import { MAX_PRICE, parsePrice, priceErrorMessage } from "@/lib/products/parse";
 import { isProductUnit, parseUnit, type ProductUnit } from "@/lib/products/units";
 
 export const GRID_COLUMNS = ["name", "price", "unit"] as const;
@@ -293,6 +293,10 @@ export function saveRowError(row: SaveRow): string | null
 	if (row.price_per_unit !== null && !(typeof row.price_per_unit === "number" && row.price_per_unit > 0))
 	{
 		return `El precio de "${name}" debe ser mayor que cero.`;
+	}
+	if (row.price_per_unit !== null && (row.price_per_unit > MAX_PRICE || Math.round(row.price_per_unit * 100) / 100 !== row.price_per_unit))
+	{
+		return `El precio de "${name}" no es válido (máximo 99,999,999.99 y 2 decimales).`;
 	}
 	if (row.unit !== null && !isProductUnit(row.unit))
 	{

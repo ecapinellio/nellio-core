@@ -74,7 +74,7 @@ export function ConflictDialog({
 										aria-pressed={choice === "theirs"}
 										onClick={() => onChoose(c.id, "theirs")}
 									>
-										Usar el de {firstName(who)}
+										{c.updated_by_name ? `Usar el de ${firstName(c.updated_by_name)}` : "Usar el guardado"}
 									</Button>
 									<Button
 										type="button"

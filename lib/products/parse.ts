@@ -1,6 +1,9 @@
+/** products.price_per_unit is numeric(10,2). */
+export const MAX_PRICE = 99_999_999.99;
+
 export type PriceParse =
 	| { ok: true; value: number }
-	| { ok: false; reason: "empty" | "invalid" | "nonpositive" | "decimals" }
+	| { ok: false; reason: "empty" | "invalid" | "nonpositive" | "decimals" | "toolarge" }
 	| { ok: false; reason: "ambiguous"; suggestions: number[] };
 
 /**
@@ -67,6 +70,10 @@ export function parsePrice(text: string): PriceParse
 	{
 		return { ok: false, reason: "nonpositive" };
 	}
+	if (value > MAX_PRICE)
+	{
+		return { ok: false, reason: "toolarge" };
+	}
 	return { ok: true, value };
 }
 
@@ -85,5 +92,7 @@ export function priceErrorMessage(result: Exclude<PriceParse, { ok: true }>): st
 			return "Debe ser mayor que 0";
 		case "invalid":
 			return "No es un precio";
+		case "toolarge":
+			return "Precio demasiado alto";
 	}
 }

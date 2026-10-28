@@ -72,7 +72,7 @@ export const CatalogRow = memo(function CatalogRow({
 		<tr className={cn("border-b border-border align-top", inactive && "text-muted-foreground")}>
 			<td className="w-4 pt-3.5 pl-1">
 				{isDirty(row)
-					? <span className="block size-1.5 rounded-full bg-primary" aria-label="Cambio sin guardar" />
+					? <span className="block size-1.5 rounded-full bg-primary"><span className="sr-only">Cambio sin guardar</span></span>
 					: null}
 			</td>
 			<td className="py-1 pr-2">

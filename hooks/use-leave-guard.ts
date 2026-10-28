@@ -7,8 +7,9 @@ import { useRouter } from "next/navigation";
  * Asks before leaving the page while `active`. App Router has no
  * route-change event to block, so this covers every exit by hand:
  * tab close/reload (beforeunload), in-app links (capture-phase click), and
- * form submits (the header's "Cerrar sesión" is a Server Action form whose
- * redirect never fires beforeunload).
+ * forms marked `data-leave-guard` (the header's "Cerrar sesión" is a Server
+ * Action form whose redirect never fires beforeunload). Browser back/forward
+ * isn't covered — see TODOS.md.
  */
 export function useLeaveGuard(active: boolean, message: string)
 {
@@ -55,6 +56,13 @@ export function useLeaveGuard(active: boolean, message: string)
 
 		function handleSubmit(e: SubmitEvent)
 		{
+			// Only forms that leave the page opt in (data-leave-guard, e.g. the
+			// header's logout) — otherwise this would also block the page's own
+			// save forms, like the catalog's phone edit sheet.
+			if (!(e.target as HTMLElement).closest("[data-leave-guard]"))
+			{
+				return;
+			}
 			if (!window.confirm(message))
 			{
 				e.preventDefault();

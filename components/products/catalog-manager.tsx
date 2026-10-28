@@ -48,6 +48,14 @@ interface Toast
 	showProblems?: boolean;
 }
 
+interface PastePrompt
+{
+	key: string;
+	column: GridColumn;
+	text: string;
+	renamed: number;
+}
+
 interface UnitPrompt
 {
 	key: string;
@@ -99,6 +107,7 @@ export function CatalogManager({ products }: { products: CatalogProduct[] })
 	const [choices, setChoices] = useState<Record<string, ConflictChoice>>({});
 	const [guideOpen, setGuideOpen] = useState(products.length === 0);
 	const [unitPrompt, setUnitPrompt] = useState<UnitPrompt | null>(null);
+	const [pastePrompt, setPastePrompt] = useState<PastePrompt | null>(null);
 	const [editing, setEditing] = useState<GridRow | null>(null);
 
 	// Fresh rows whenever the server sends a new catalog (after a save's
@@ -160,10 +169,11 @@ export function CatalogManager({ products }: { products: CatalogProduct[] })
 
 	// Handlers read the latest state through a ref so they stay stable and
 	// memoized rows don't re-render on every keystroke elsewhere (D9).
-	const latest = useRef({ rows, visible });
+	const filtering = search !== "" || onlyNoPrice || onlyProblems;
+	const latest = useRef({ rows, visible, filtering });
 	useEffect(() =>
 	{
-		latest.current = { rows, visible };
+		latest.current = { rows, visible, filtering };
 	});
 
 	const showToast = useCallback((text: string, showProblems = false) =>
@@ -181,6 +191,50 @@ export function CatalogManager({ products }: { products: CatalogProduct[] })
 		return () => clearTimeout(timer);
 	}, [toast]);
 
+	/**
+	 * Fills rows from a paste and shows the summary toast (design D8 / 5A).
+	 * key = row pasted into, or null for "add as new rows" (starts at the
+	 * trailing blank row, ignoring filters).
+	 */
+	const applyPaste = useCallback((key: string | null, column: GridColumn, text: string): boolean =>
+	{
+		const { rows: all, visible, filtering } = latest.current;
+		const shown = key === null ? all : visible;
+		const start = key === null ? all.findIndex(isBlank) : shown.findIndex((r) => r.key === key);
+		// Fill down the rows the user SEES (filters may hide some).
+		const result = fillFromPaste(shown, start, column, text, newKey);
+		if (!result)
+		{
+			return false;
+		}
+		const updated = new Map(result.rows.map((r) => [r.key, r]));
+		const known = new Set(all.map((r) => r.key));
+		const merged = all.map((r) => updated.get(r.key) ?? r).filter((r) => !(isBlank(r) && !updated.has(r.key)));
+		// Under a search/filter, new rows would be created hidden (no name
+		// yet, so the filter drops them) and then block saving unseen —
+		// so a filtered paste only fills the rows on screen.
+		const filtered = key !== null && filtering;
+		const created = result.rows.filter((r) => !known.has(r.key));
+		const added = filtered ? [] : created;
+		const dropped = filtered ? created.length : 0;
+		const next = withTrailingRow([...merged, ...added], newKey);
+		setRows(next);
+
+		const touched = result.rows.slice(start, start + result.filled - dropped);
+		const dupes = findDuplicates(next);
+		const nDup = touched.filter((r) => dupes.has(r.key)).length;
+		const nPrice = touched.filter((r) => rowIssues(r).price?.kind === "error").length;
+		const nUnit = touched.filter((r) => r.unitRaw).length;
+		const parts = [`Pegaste ${plural(result.filled - dropped, "fila", "filas")} en ${COLUMN_LABELS[column]}`];
+		if (dropped) parts.push(`${plural(dropped, "fila no entró", "filas no entraron")} (quita el filtro para agregar filas nuevas)`);
+		if (nDup) parts.push(plural(nDup, "repetido", "repetidos"));
+		if (nPrice) parts.push(plural(nPrice, "precio por revisar", "precios por revisar"));
+		if (nUnit) parts.push(plural(nUnit, "unidad no reconocida", "unidades no reconocidas"));
+		if (result.extraColumns) parts.push(result.extraColumns === 1 ? "se ignoró 1 columna extra" : `se ignoraron ${result.extraColumns} columnas extra`);
+		showToast(parts.join(" · "), nDup + nPrice + nUnit > 0);
+		return true;
+	}, [newKey, showToast]);
+
 	const handlers = useMemo<RowHandlers>(() => ({
 		onChange: (key, patch) =>
 		{
@@ -188,34 +242,30 @@ export function CatalogManager({ products }: { products: CatalogProduct[] })
 		},
 		onPaste: (key, column, text) =>
 		{
-			const { rows: all, visible: shown } = latest.current;
-			const start = shown.findIndex((r) => r.key === key);
-			// Fill down the rows the user SEES (filters may hide some).
-			const result = fillFromPaste(shown, start, column, text, newKey);
-			if (!result)
+			// Pasted names landing on saved products would rename them, and old
+			// orders show the product's current name — so ask first (/review).
+			if (column === "name")
 			{
-				return false;
+				const shown = latest.current.visible;
+				const start = shown.findIndex((r) => r.key === key);
+				let probe = 0;
+				const preview = fillFromPaste(shown, start, column, text, () => `probe-${probe++}`);
+				if (!preview)
+				{
+					return false;
+				}
+				const renamed = preview.rows.slice(start, start + preview.filled).filter((r, i) =>
+				{
+					const before = shown[start + i];
+					return before !== undefined && before.original !== null && before.name !== r.name;
+				}).length;
+				if (renamed > 0)
+				{
+					setPastePrompt({ key, column, text, renamed });
+					return true;
+				}
 			}
-			const updated = new Map(result.rows.map((r) => [r.key, r]));
-			const known = new Set(all.map((r) => r.key));
-			const merged = all.map((r) => updated.get(r.key) ?? r).filter((r) => !(isBlank(r) && !updated.has(r.key)));
-			const added = result.rows.filter((r) => !known.has(r.key));
-			const next = withTrailingRow([...merged, ...added], newKey);
-			setRows(next);
-
-			// Paste summary (design D8 / 5A).
-			const touched = result.rows.slice(start, start + result.filled);
-			const dupes = findDuplicates(next);
-			const nDup = touched.filter((r) => dupes.has(r.key)).length;
-			const nPrice = touched.filter((r) => rowIssues(r).price?.kind === "error").length;
-			const nUnit = touched.filter((r) => r.unitRaw).length;
-			const parts = [`Pegaste ${plural(result.filled, "fila", "filas")} en ${COLUMN_LABELS[column]}`];
-			if (nDup) parts.push(plural(nDup, "repetido", "repetidos"));
-			if (nPrice) parts.push(plural(nPrice, "precio por revisar", "precios por revisar"));
-			if (nUnit) parts.push(plural(nUnit, "unidad no reconocida", "unidades no reconocidas"));
-			if (result.extraColumns) parts.push(result.extraColumns === 1 ? "se ignoró 1 columna extra" : `se ignoraron ${result.extraColumns} columnas extra`);
-			showToast(parts.join(" · "), nDup + nPrice + nUnit > 0);
-			return true;
+			return applyPaste(key, column, text);
 		},
 		onUnitPick: (key, unit) =>
 		{
@@ -236,7 +286,7 @@ export function CatalogManager({ products }: { products: CatalogProduct[] })
 		{
 			setRows((prev) => prev.map((r) => (r.key === key ? { ...r, active: !r.active } : r)));
 		},
-	}), [newKey, showToast]);
+	}), [newKey, applyPaste]);
 
 	function applyUnitPrompt(all: boolean)
 	{
@@ -346,8 +396,6 @@ export function CatalogManager({ products }: { products: CatalogProduct[] })
 		return norm && rows.some((r) => r.key !== key && !isBlank(r) && normalizeProductName(r.name) === norm) ? "Ya existe" : undefined;
 	}, [rows]);
 
-	const filtering = search !== "" || onlyNoPrice || onlyProblems;
-
 	return (
 		<div className="flex flex-col gap-5">
 			<header className="flex flex-wrap items-end justify-between gap-3">
@@ -411,7 +459,9 @@ export function CatalogManager({ products }: { products: CatalogProduct[] })
 			</div>
 
 			{/* Desktop / tablet: the editable grid. */}
-			<div className="hidden md:block">
+			{/* Read-only while saving (design D7): edits made mid-save would be
+			    wiped when the saved catalog comes back. */}
+			<fieldset disabled={saving} aria-busy={saving} className="m-0 hidden min-w-0 border-0 p-0 md:block">
 				<table className="w-full border-collapse">
 					<thead>
 						<tr className="border-b border-border text-left text-xs font-medium text-muted-foreground">
@@ -438,7 +488,7 @@ export function CatalogManager({ products }: { products: CatalogProduct[] })
 				{filtering && visible.length === 0
 					? <EmptyFilter search={search} onClear={() => { setSearch(""); setOnlyNoPrice(false); setProblemFilter(null); }} />
 					: null}
-			</div>
+			</fieldset>
 
 			{/* Phone: read the list, edit one at a time (design D11). */}
 			<ul className="flex flex-col divide-y divide-border rounded-lg border border-border md:hidden">
@@ -533,6 +583,27 @@ export function CatalogManager({ products }: { products: CatalogProduct[] })
 				onCancel={() => setConflicts(null)}
 			/>
 
+			<Dialog open={pastePrompt !== null} onOpenChange={(open) => { if (!open) setPastePrompt(null); }}>
+				<DialogContent className="sm:max-w-md">
+					<DialogHeader>
+						<DialogTitle>
+							¿Cambiar el nombre de {pastePrompt?.renamed === 1 ? "1 producto que ya existe" : `${pastePrompt?.renamed} productos que ya existen`}?
+						</DialogTitle>
+						<DialogDescription>
+							Pegaste sobre productos guardados. Los pedidos anteriores mostrarán el nombre nuevo.
+						</DialogDescription>
+					</DialogHeader>
+					<DialogFooter>
+						<Button type="button" variant="ghost" onClick={() => { if (pastePrompt) applyPaste(pastePrompt.key, pastePrompt.column, pastePrompt.text); setPastePrompt(null); }}>
+							Reemplazar nombres
+						</Button>
+						<Button type="button" onClick={() => { if (pastePrompt) applyPaste(null, pastePrompt.column, pastePrompt.text); setPastePrompt(null); }}>
+							Agregar como nuevos
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
 			<Dialog open={unitPrompt !== null} onOpenChange={(open) => { if (!open) setUnitPrompt(null); }}>
 				<DialogContent className="sm:max-w-md">
 					<DialogHeader>
@@ -554,6 +625,7 @@ export function CatalogManager({ products }: { products: CatalogProduct[] })
 				row={editing}
 				duplicate={sheetDuplicate}
 				saving={saving}
+				error={saveError}
 				onSave={saveFromSheet}
 				onClose={() => setEditing(null)}
 			/>

@@ -243,7 +243,16 @@ enforcement and these columns are audit-only — same habit as
 **Priority:** P3
 **Depends on:** RBAC Slice 3 (user list + deactivate/reactivate).
 
-### Force password change on first login for admin-created users
+### ~~Force password change on first login for admin-created users~~ — DONE
+
+**Done 2026-10-28:** `app_metadata.must_change_password` is set whenever an
+admin hands out a generated password (create, restore, reactivate); the
+proxy and the login action send the user to `/account/password` until they
+pick their own, and Server Actions reject them meanwhile. The same page is
+reachable from the header/drawer for voluntary changes. Enforced in the app
+only (not in `tenant_id()`): the only other person who knows the temporary
+password is the admin, who can already see the whole tenant. Still open: an
+SMTP-backed self-service reset ("olvidé mi contraseña").
 
 **What:** A `must_change_password` flag on `public.users`, checked at login
 and redirecting to a change-password form before the user can reach the app.

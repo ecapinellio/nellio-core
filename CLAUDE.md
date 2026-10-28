@@ -215,7 +215,8 @@ ruta de `lib/rbac.ts`, y la creación de usuarios por el admin
 la gestión de usuarios (restablecer/desactivar/reactivar, `list_tenant_users()`),
 la revocación de sesión de `tenant_id()` (ADR-009), y el catálogo de productos
 (`save_products()`: guardado en lote, conflictos, repetidos, productos
-desactivados; y la lógica pura de la tabla en `lib/products/`).
+desactivados; y la lógica pura de la tabla en `lib/products/`), y el cambio
+de contraseña obligatorio al primer ingreso (`must_change_password`).
 
 **CI:** `.github/workflows/test.yml` corre la suite en cada push/PR contra un
 stack de Supabase local efímero (sin secrets — son las keys demo locales).

@@ -39,11 +39,15 @@ async function signIn(email: string, password: string)
 	return { client, error };
 }
 
-function form(password: string, confirm = password): FormData
+function form(password: string, confirm = password, current?: string): FormData
 {
 	const data = new FormData();
 	data.set("password", password);
 	data.set("confirm", confirm);
+	if (current !== undefined)
+	{
+		data.set("current", current);
+	}
 	return data;
 }
 
@@ -74,11 +78,11 @@ describe("must_change_password: forced first-login password change", () =>
 		caller = tenant.admin;
 	});
 
-	async function makeUser(role: Role, password?: string)
+	async function makeUser(role: Role, password?: string, mustChangePassword?: boolean)
 	{
 		const email = `pw+${randomUUID()}@test.nellio.local`;
 		const { data, error } = await createUserInTenant(service, {
-			tenantId: tenant.tenantId, email, name: `Pw ${role}`, role, createdBy: null, password,
+			tenantId: tenant.tenantId, email, name: `Pw ${role}`, role, createdBy: null, password, mustChangePassword,
 		});
 		expect(error).toBeNull();
 		createdAuthIds.push(data!.id);
@@ -108,12 +112,14 @@ describe("must_change_password: forced first-login password change", () =>
 
 	describe("who gets the flag", () =>
 	{
-		it("a generated password sets it; one chosen by the owner (bootstrap) doesn't", async () =>
+		it("set for generated passwords and passwords typed on someone's behalf; off only on request (--keep-password)", async () =>
 		{
 			const generated = await makeUser("operator");
-			const chosen = await makeUser("admin", "dueño-elige-su-clave");
+			const typedForThem = await makeUser("admin", "alguien-la-escribio");
+			const ownerChose = await makeUser("admin", "dueño-elige-su-clave", false);
 			expect(await appMetadata(generated.id)).toMatchObject({ must_change_password: true, tenant_id: tenant.tenantId, role: "operator" });
-			expect(await appMetadata(chosen.id)).toMatchObject({ must_change_password: false });
+			expect(await appMetadata(typedForThem.id)).toMatchObject({ must_change_password: true });
+			expect(await appMetadata(ownerChose.id)).toMatchObject({ must_change_password: false });
 		});
 
 		it("restore and reactivate set it again, keeping tenant and role", async () =>
@@ -145,11 +151,32 @@ describe("must_change_password: forced first-login password change", () =>
 			expect((await signIn(user.email, "mi frase secreta")).error).toBeNull();
 		});
 
-		it("voluntary: changes the password and stays on the page with a confirmation", async () =>
+		it("closes every other session — e.g. the admin who signed in with the temporary password", async () =>
 		{
-			const user = await makeUser("driver", "clave-elegida-1");
+			const user = await makeUser("operator");
+			const elsewhere = await signIn(user.email, user.password);
+			const { data: before } = await elsewhere.client.from("users").select("id");
+			expect(before!.length).toBeGreaterThan(0);
+			const { data: { session } } = await elsewhere.client.auth.getSession();
+
 			caller = user.client;
-			await expect(changePassword({ error: null }, form("clave-elegida-2"))).rejects.toThrow("REDIRECT /account/password?changed=1");
+			await expect(changePassword({ error: null }, form("solo yo la conozco"))).rejects.toThrow("REDIRECT /");
+
+			expect((await elsewhere.client.from("users").select("id")).data).toEqual([]);
+			expect((await elsewhere.client.auth.refreshSession({ refresh_token: session!.refresh_token })).error).not.toBeNull();
+			// The session that made the change keeps working.
+			expect((await user.client.from("users").select("id")).data!.length).toBeGreaterThan(0);
+		});
+
+		it("voluntary: requires the current password, then changes it and confirms", async () =>
+		{
+			const user = await makeUser("driver", "clave-elegida-1", false);
+			caller = user.client;
+			expect(await changePassword({ error: null }, form("clave-elegida-2"))).toEqual({ error: "Escribe tu contraseña actual." });
+			expect(await changePassword({ error: null }, form("clave-elegida-2", "clave-elegida-2", "no-es-esta"))).toEqual({ error: "La contraseña actual no es correcta." });
+			expect((await signIn(user.email, "clave-elegida-1")).error).toBeNull();
+
+			await expect(changePassword({ error: null }, form("clave-elegida-2", "clave-elegida-2", "clave-elegida-1"))).rejects.toThrow("REDIRECT /account/password?changed=1");
 			expect((await signIn(user.email, "clave-elegida-2")).error).toBeNull();
 		});
 

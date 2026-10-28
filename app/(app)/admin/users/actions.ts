@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createUserInTenant, generatePassword } from "@/lib/users/create-user";
 import { BAN_FOREVER, UNBAN, isBanned } from "@/lib/users/ban";
-import { mustChangePassword } from "@/lib/auth/password";
+import { getActiveUser } from "@/lib/auth/active-user";
 
 export type CreatableRole = "operator" | "driver";
 
@@ -64,12 +64,9 @@ interface AdminCaller
  */
 async function requireAdmin(): Promise<AdminCaller | null>
 {
-	const supabase = await createClient();
-	const { data: { user } } = await supabase.auth.getUser();
+	const user = await getActiveUser(await createClient());
 
-	// A caller still on an admin-generated password must set their own
-	// first — the proxy redirects them, this is the backend half (ADR-006).
-	if (!user || user.app_metadata.role !== "admin" || mustChangePassword(user))
+	if (!user || user.app_metadata.role !== "admin")
 	{
 		return null;
 	}

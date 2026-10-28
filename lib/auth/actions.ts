@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PASSWORD_PATH, mustChangePassword, newPasswordError } from "@/lib/auth/password";
@@ -83,6 +84,28 @@ export async function changePassword(_prevState: ChangePasswordState, formData: 
 		return { error: problem };
 	}
 
+	// A voluntary change re-checks the current password, so an unlocked
+	// phone or a stolen session can't take the account over (and, since the
+	// change closes every other session, lock the owner out). Checked on a
+	// throwaway client so the caller's cookie session isn't touched.
+	if (!mustChangePassword(user))
+	{
+		const current = formData.get("current");
+		if (typeof current !== "string" || current === "")
+		{
+			return { error: "Escribe tu contraseña actual." };
+		}
+		const probe = createSupabaseClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+			auth: { autoRefreshToken: false, persistSession: false },
+		});
+		const { error: currentError } = await probe.auth.signInWithPassword({ email: user.email!, password: current });
+		if (currentError)
+		{
+			return { error: "La contraseña actual no es correcta." };
+		}
+		await probe.auth.signOut({ scope: "local" });
+	}
+
 	const { error } = await supabase.auth.updateUser({ password: password as string });
 	if (error)
 	{
@@ -96,6 +119,13 @@ export async function changePassword(_prevState: ChangePasswordState, formData: 
 		}
 		return { error: "No se pudo cambiar la contraseña. Intenta de nuevo." };
 	}
+
+	// Close every other session: whoever used the old password elsewhere
+	// (e.g. the admin, with the temporary one) must not stay signed in.
+	// GoTrue already revokes them on a password change (verified locally,
+	// tests/change-password.test.ts); this keeps it explicit instead of
+	// depending on that default. ADR-009 cuts their data access at once.
+	await supabase.auth.signOut({ scope: "others" });
 
 	const forced = mustChangePassword(user);
 	if (forced)

@@ -26,6 +26,22 @@ export function ChangePasswordForm({ forced }: { forced: boolean })
 				)
 				: null}
 
+			{!forced
+				? (
+					<div className="flex flex-col gap-2">
+						<Label htmlFor="current">Contraseña actual</Label>
+						<Input
+							id="current"
+							name="current"
+							type="password"
+							autoComplete="current-password"
+							required
+							className="h-11 md:h-9"
+						/>
+					</div>
+				)
+				: null}
+
 			<div className="flex flex-col gap-2">
 				<Label htmlFor="password">Contraseña nueva</Label>
 				<Input

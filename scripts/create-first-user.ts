@@ -10,12 +10,14 @@
  *     --tenant-name "ECTEC" \
  *     --admin-email "milo@ectec.com" \
  *     --admin-name "Milo" \
- *     [--admin-password "..."] \
+ *     [--admin-password "..."] [--keep-password] \
  *     [--role admin|operator|driver] \
  *     [--tenant-id "<existing tenant uuid>"]
  *
  * If --admin-password is omitted, a random one is generated and printed
- * once — save it, it is not stored anywhere.
+ * once — save it, it is not stored anywhere. Either way the user must pick
+ * their own password on first login; pass --keep-password only when the
+ * account owner is the one typing --admin-password.
  *
  * --role defaults to "admin" (unchanged default). Pass --tenant-id to
  * attach the new user to an existing tenant instead of creating one —
@@ -65,6 +67,7 @@ async function main()
 			"admin-email": { type: "string" },
 			"admin-name": { type: "string" },
 			"admin-password": { type: "string" },
+			"keep-password": { type: "boolean" },
 			"role": { type: "string" },
 		},
 	});
@@ -78,7 +81,7 @@ async function main()
 	if (!adminEmail || !adminName || (!existingTenantId && !tenantName))
 	{
 		console.error(
-			"Usage: pnpm bootstrap:admin -- --tenant-name <name> --admin-email <email> --admin-name <name> [--admin-password <password>] [--role admin|operator|driver] [--tenant-id <existing tenant uuid>]",
+			"Usage: pnpm bootstrap:admin -- --tenant-name <name> --admin-email <email> --admin-name <name> [--admin-password <password> [--keep-password]] [--role admin|operator|driver] [--tenant-id <existing tenant uuid>]",
 		);
 		process.exit(1);
 	}
@@ -127,6 +130,7 @@ async function main()
 		role,
 		createdBy: null,
 		password: values["admin-password"],
+		mustChangePassword: !(values["keep-password"] && values["admin-password"]),
 	});
 
 	if (error || !created)

@@ -20,6 +20,8 @@ export interface CreateUserInTenantInput
 	createdBy: string | null;
 	/** CLI override (scripts/create-first-user.ts --admin-password); omit to auto-generate. */
 	password?: string;
+	/** Defaults to true; false only when the account owner picked `password`. */
+	mustChangePassword?: boolean;
 }
 
 export interface CreateUserInTenantResult
@@ -82,10 +84,11 @@ export async function createUserInTenant(
 		app_metadata: {
 			tenant_id: input.tenantId,
 			role: input.role,
-			// A generated password was seen by whoever created the user, so
-			// the person must replace it on first login. A password passed in
-			// explicitly (bootstrap script) was chosen by its owner.
-			must_change_password: input.password === undefined,
+			// Whoever created the user has seen this password (generated, or
+			// typed into the bootstrap script on someone's behalf), so the
+			// person replaces it on first login — unless the caller says the
+			// owner chose it themselves (bootstrap --keep-password).
+			must_change_password: input.mustChangePassword ?? true,
 		},
 	});
 

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { saveProductsRpc, type SaveConflict } from "@/lib/products/catalog";
-import { mustChangePassword } from "@/lib/auth/password";
+import { getActiveUser } from "@/lib/auth/active-user";
 import { saveRowError, MAX_SAVE_ROWS, type SaveRow } from "@/lib/products/grid";
 
 export type SaveProductsResult =
@@ -24,9 +24,9 @@ const GENERIC_ERROR = "No se pudo guardar. Revisa tu conexión e intenta de nuev
 export async function saveProducts(rows: SaveRow[]): Promise<SaveProductsResult>
 {
 	const supabase = await createClient();
-	const { data: { user } } = await supabase.auth.getUser();
+	const user = await getActiveUser(supabase);
 	const role = user?.app_metadata.role;
-	if (!user || (role !== "admin" && role !== "operator") || mustChangePassword(user))
+	if (!user || (role !== "admin" && role !== "operator"))
 	{
 		return { status: "error", error: UNAUTHORIZED };
 	}

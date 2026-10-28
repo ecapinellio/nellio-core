@@ -75,6 +75,22 @@ branch there is a small, contained change if this ever becomes real.
 **Priority:** P3
 **Depends on:** Slice 4 (order detail dialog) — shipped first.
 
+### Full per-product change history (who changed what, every time)
+
+**What:** A history table recording every product change (name, price, unit,
+active) with author and time, plus a way to view it.
+
+**Why:** The catalog keeps only the latest `updated_by`/`updated_at`. If a
+price ends up wrong there's no way to see how it got there.
+
+**Context:** Deferred in the product catalog eng review (D5, 2026-10-27).
+Design it together with "Full price-change history for orders" below — one
+history pattern for both.
+
+**Effort:** M
+**Priority:** P3
+**Depends on:** Product catalog page shipped.
+
 ### Full price-change history for orders (not just the most recent)
 
 **What:** A log of every price override an order's line items ever went
@@ -250,7 +266,44 @@ starts handing out admin-known passwords in the first place.
 
 ## Product Catalog
 
-### Dedicated product catalog page (candidate slice 6)
+### ECTEC's real units (saco, cubeta, tambo, caja…) before loading their catalog
+
+**What:** Extend `products_unit_check` (and `lib/products/units.ts`) with the
+units ECTEC actually sells by, once we've seen their real product Excel.
+
+**Why:** Today only `ton, kg, lb, l, gal, each` exist. A chemical distributor
+very likely sells by "saco 25 kg", "cubeta", "tambo 55 gal" — if so, the
+white-glove catalog load stalls or forces wrong units.
+
+**Context:** Raised by both the eng review and the outside voice of the
+product catalog plan (2026-10-27,
+`~/.gstack/projects/ecapinellio-nellio-core/emiliocarbonell-main-eng-review-plan-20261026-product-catalog.md`).
+Also ask ECTEC: are sizes separate products or presentations of one? Are
+prices with or without IVA (13%)?
+
+**Effort:** S
+**Priority:** P1 — blocks loading ECTEC's catalog in production.
+**Depends on:** ECTEC's product Excel.
+
+### Virtualize the catalog grid for very large catalogs (>1000 products)
+
+**What:** Render only the visible rows of `/products`' grid.
+
+**Why:** Memoized rows (eng review D9) keep typing smooth up to ~1000 rows;
+beyond that initial render and paste fill get slow.
+
+**Context:** ECTEC likely has <300 products. Only needed for a much larger tenant.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Product catalog page shipped.
+
+### ~~Dedicated product catalog page (candidate slice 6)~~ — DONE
+
+**Done 2026-10-28:** `/products` — spreadsheet-style grid (paste columns from
+Excel, per-cell validation, duplicates, deactivation, concurrent-edit
+dialog), phone list with one-at-a-time editing. Plan + reviews:
+`~/.gstack/projects/ecapinellio-nellio-core/emiliocarbonell-main-eng-review-plan-20261026-product-catalog.md`.
 
 **What:** An admin/operator screen to bulk-create and edit the full product
 catalog (name, price per unit, unit) outside the order-capture flow — the

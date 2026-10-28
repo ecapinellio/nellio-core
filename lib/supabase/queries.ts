@@ -1,6 +1,7 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json, Tables } from "@/lib/supabase/database.types";
 import type { OrderStatus } from "@/lib/order-math";
+import type { ProductUnit } from "@/lib/products/units";
 
 export type Customer = Tables<"customers">;
 export type Product = Tables<"products">;
@@ -45,8 +46,7 @@ export async function quickAddCustomer(supabase: Client, name: string): Promise<
 	return { data, error };
 }
 
-// Mirrors the quick_add_product RPC's check constraint (products_unit_check).
-export type ProductUnit = "ton" | "kg" | "lb" | "l" | "gal" | "each";
+export type { ProductUnit };
 
 export interface QuickAddProductOptions
 {

@@ -50,6 +50,7 @@ export type Database = {
           tenant_id: string
           updated_at: string
         }
+        ComputedFields: never
         Insert: {
           address?: string | null
           cod_actividad?: string | null
@@ -103,6 +104,7 @@ export type Database = {
           tenant_id: string
           unit_at_order: string | null
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           id?: string
@@ -170,6 +172,7 @@ export type Database = {
           tenant_id: string
           updated_at: string
         }
+        ComputedFields: never
         Insert: {
           channel?: string
           created_at?: string
@@ -218,6 +221,7 @@ export type Database = {
       }
       products: {
         Row: {
+          active: boolean
           created_at: string
           id: string
           name: string
@@ -225,8 +229,11 @@ export type Database = {
           tenant_id: string
           unit: string | null
           updated_at: string
+          updated_by: string | null
         }
+        ComputedFields: never
         Insert: {
+          active?: boolean
           created_at?: string
           id?: string
           name: string
@@ -234,8 +241,10 @@ export type Database = {
           tenant_id: string
           unit?: string | null
           updated_at?: string
+          updated_by?: string | null
         }
         Update: {
+          active?: boolean
           created_at?: string
           id?: string
           name?: string
@@ -243,6 +252,7 @@ export type Database = {
           tenant_id?: string
           unit?: string | null
           updated_at?: string
+          updated_by?: string | null
         }
         Relationships: [
           {
@@ -250,6 +260,13 @@ export type Database = {
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -268,6 +285,7 @@ export type Database = {
           nrc: string | null
           phone: string | null
         }
+        ComputedFields: never
         Insert: {
           address?: string | null
           cod_actividad?: string | null
@@ -305,6 +323,7 @@ export type Database = {
           role: string
           tenant_id: string
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           created_by?: string | null
@@ -350,9 +369,12 @@ export type Database = {
         Returns: Json
       }
       immutable_unaccent: { Args: { "": string }; Returns: string }
-      is_operator_or_admin: { Args: never; Returns: boolean }
+      is_operator_or_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
       list_tenant_users: {
-        Args: never
+        Args: Record<PropertyKey, never>
         Returns: {
           banned_until: string
           created_at: string
@@ -363,6 +385,7 @@ export type Database = {
           role: string
         }[]
       }
+      normalize_product_name: { Args: { p_name: string }; Returns: string }
       quick_add_customer: {
         Args: { p_name: string }
         Returns: {
@@ -390,6 +413,7 @@ export type Database = {
       quick_add_product: {
         Args: { p_name: string; p_price_per_unit?: number; p_unit?: string }
         Returns: {
+          active: boolean
           created_at: string
           id: string
           name: string
@@ -397,6 +421,7 @@ export type Database = {
           tenant_id: string
           unit: string | null
           updated_at: string
+          updated_by: string | null
         }
         SetofOptions: {
           from: "*"
@@ -405,7 +430,8 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      role: { Args: never; Returns: string }
+      role: { Args: Record<PropertyKey, never>; Returns: string }
+      save_products: { Args: { p_rows: Json }; Returns: Json }
       search_customers: {
         Args: { p_limit?: number; p_query: string }
         Returns: {
@@ -433,6 +459,7 @@ export type Database = {
       search_products: {
         Args: { p_limit?: number; p_query: string }
         Returns: {
+          active: boolean
           created_at: string
           id: string
           name: string
@@ -440,6 +467,7 @@ export type Database = {
           tenant_id: string
           unit: string | null
           updated_at: string
+          updated_by: string | null
         }[]
         SetofOptions: {
           from: "*"
@@ -448,7 +476,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
-      tenant_id: { Args: never; Returns: string }
+      tenant_id: { Args: Record<PropertyKey, never>; Returns: string }
       update_order_detail: {
         Args: { p_notes: string; p_order_id: string; p_price_updates: Json }
         Returns: Json
@@ -471,12 +499,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -500,11 +528,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -525,11 +553,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -550,11 +578,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -567,11 +595,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never) = never,
+    : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -588,4 +616,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-

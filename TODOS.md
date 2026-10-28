@@ -294,6 +294,21 @@ prices with or without IVA (13%)?
 **Priority:** P1 — blocks loading ECTEC's catalog in production.
 **Depends on:** ECTEC's product Excel.
 
+### Password history (don't reuse recent passwords)
+
+**What:** Reject a new password equal to one of the user's last N (e.g. 3).
+
+**Why:** Requirements now force strong passwords and GoTrue already rejects
+reusing the *current* one, but a user could cycle back to an old password.
+
+**Context:** Asked by the user 2026-10-28 while adding password
+requirements; deferred — Supabase Auth keeps no history, so it needs our
+own table of bcrypt hashes (sensitive data) checked in `changePassword()`.
+
+**Effort:** M
+**Priority:** P3
+**Depends on:** Nothing.
+
 ### Leave guard doesn't cover browser back/forward
 
 **What:** Warn before the browser's back/forward button discards unsaved

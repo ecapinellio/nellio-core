@@ -76,7 +76,7 @@ describe("createUserInTenant() / createOperatorOrDriver()", () =>
 
 			expect(error).toBeNull();
 			createdAuthIds.push(data!.id);
-			expect(data!.password.length).toBeGreaterThanOrEqual(24);
+			expect(data!.password.length).toBeGreaterThanOrEqual(20);
 
 			const { data: row } = await service.from("users").select().eq("id", data!.id).single();
 			expect(row).toMatchObject({ tenant_id: tenant.tenantId, name: "Helper Operator", role: "operator", created_by: tenant.adminId });

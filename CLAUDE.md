@@ -189,6 +189,11 @@ verificación en backend.
   (el editor salta el RLS y muestra todas las filas).
 - Toda tabla nueva con `tenant_id`: activar RLS y crear la política de aislamiento.
 - Indexar siempre `tenant_id`.
+- Requisitos de contraseña (mín. 10 con mayúscula, minúscula, número y
+  símbolo): definidos en `lib/auth/password.ts` y en `supabase/config.toml`
+  (local). **`config.toml` no se sube a producción con `db push`**: en el
+  proyecto hosted se configuran a mano en el dashboard (Authentication →
+  Providers → Email). Si cambian, actualizar los tres lugares.
 
 ---
 

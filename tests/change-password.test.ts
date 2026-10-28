@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import { setupTenant, type TestTenant } from "@/tests/fixtures";
-import { createUserInTenant } from "@/lib/users/create-user";
+import { createUserInTenant, generatePassword } from "@/lib/users/create-user";
 import { mustChangePassword, newPasswordError } from "@/lib/auth/password";
 import { isRouteAllowed, type Role } from "@/lib/rbac";
 
@@ -95,10 +95,31 @@ describe("must_change_password: forced first-login password change", () =>
 		it("validates length, byte limit and confirmation", () =>
 		{
 			expect(newPasswordError("", "")).toBe("Escribe tu contraseña nueva.");
-			expect(newPasswordError("corta", "corta")).toBe("Usa al menos 10 caracteres.");
-			expect(newPasswordError("ñ".repeat(40), "ñ".repeat(40))).toBe("Usa como máximo 72 caracteres.");
-			expect(newPasswordError("una frase larga", "otra frase")).toBe("Las dos contraseñas no coinciden.");
-			expect(newPasswordError("una frase larga", "una frase larga")).toBeNull();
+			expect(newPasswordError("corta", "corta")).toBe("A tu contraseña le falta: 10 caracteres, una mayúscula, un número y un símbolo.");
+			expect(newPasswordError("unafraselarga", "unafraselarga")).toBe("A tu contraseña le falta: una mayúscula, un número y un símbolo.");
+			expect(newPasswordError("Ectec2026pedidos", "Ectec2026pedidos")).toBe("A tu contraseña le falta: un símbolo.");
+			// ASCII only, like GoTrue: accented letters don't count as uppercase.
+			expect(newPasswordError("Ñandú-2026-pedidos", "Ñandú-2026-pedidos")).toBe("A tu contraseña le falta: una mayúscula.");
+			expect(newPasswordError(`Aa1!${"ñ".repeat(40)}`, `Aa1!${"ñ".repeat(40)}`)).toBe("Usa como máximo 72 caracteres.");
+			expect(newPasswordError("Ectec-2026-pedidos", "Ectec-2026-otro")).toBe("Las dos contraseñas no coinciden.");
+			expect(newPasswordError("Ectec-2026-pedidos", "Ectec-2026-pedidos")).toBeNull();
+		});
+
+		it("generated passwords always meet the rules (20 chars, no look-alikes)", () =>
+		{
+			for (let i = 0; i < 200; i++)
+			{
+				const password = generatePassword();
+				expect(password).toHaveLength(20);
+				expect(newPasswordError(password, password)).toBeNull();
+				expect(password).not.toMatch(/[0O1lI]/);
+			}
+		});
+
+		it("Supabase Auth itself rejects a weak password, even from the server (third layer)", async () =>
+		{
+			const { error } = await service.auth.admin.createUser({ email: `weak+${randomUUID()}@test.nellio.local`, password: "sinsimbolos2026", email_confirm: true });
+			expect(error?.code).toBe("weak_password");
 		});
 
 		it("reads only a strict true flag", () =>
@@ -115,8 +136,8 @@ describe("must_change_password: forced first-login password change", () =>
 		it("set for generated passwords and passwords typed on someone's behalf; off only on request (--keep-password)", async () =>
 		{
 			const generated = await makeUser("operator");
-			const typedForThem = await makeUser("admin", "alguien-la-escribio");
-			const ownerChose = await makeUser("admin", "dueño-elige-su-clave", false);
+			const typedForThem = await makeUser("admin", "Alguien-La-Escribio-1");
+			const ownerChose = await makeUser("admin", "Dueno-Elige-Su-Clave-1", false);
 			expect(await appMetadata(generated.id)).toMatchObject({ must_change_password: true, tenant_id: tenant.tenantId, role: "operator" });
 			expect(await appMetadata(typedForThem.id)).toMatchObject({ must_change_password: true });
 			expect(await appMetadata(ownerChose.id)).toMatchObject({ must_change_password: false });
@@ -144,11 +165,11 @@ describe("must_change_password: forced first-login password change", () =>
 			const user = await makeUser("operator");
 			caller = user.client;
 
-			await expect(changePassword({ error: null }, form("mi frase secreta"))).rejects.toThrow("REDIRECT /");
+			await expect(changePassword({ error: null }, form("Mi-Frase-Secreta-7"))).rejects.toThrow("REDIRECT /");
 
 			expect(await appMetadata(user.id)).toMatchObject({ must_change_password: false, tenant_id: tenant.tenantId, role: "operator" });
 			expect((await signIn(user.email, user.password)).error).not.toBeNull();
-			expect((await signIn(user.email, "mi frase secreta")).error).toBeNull();
+			expect((await signIn(user.email, "Mi-Frase-Secreta-7")).error).toBeNull();
 		});
 
 		it("closes every other session — e.g. the admin who signed in with the temporary password", async () =>
@@ -160,7 +181,7 @@ describe("must_change_password: forced first-login password change", () =>
 			const { data: { session } } = await elsewhere.client.auth.getSession();
 
 			caller = user.client;
-			await expect(changePassword({ error: null }, form("solo yo la conozco"))).rejects.toThrow("REDIRECT /");
+			await expect(changePassword({ error: null }, form("Solo-Yo-La-Conozco-7"))).rejects.toThrow("REDIRECT /");
 
 			expect((await elsewhere.client.from("users").select("id")).data).toEqual([]);
 			expect((await elsewhere.client.auth.refreshSession({ refresh_token: session!.refresh_token })).error).not.toBeNull();
@@ -170,22 +191,22 @@ describe("must_change_password: forced first-login password change", () =>
 
 		it("voluntary: requires the current password, then changes it and confirms", async () =>
 		{
-			const user = await makeUser("driver", "clave-elegida-1", false);
+			const user = await makeUser("driver", "Clave-Elegida-1", false);
 			caller = user.client;
-			expect(await changePassword({ error: null }, form("clave-elegida-2"))).toEqual({ error: "Escribe tu contraseña actual." });
-			expect(await changePassword({ error: null }, form("clave-elegida-2", "clave-elegida-2", "no-es-esta"))).toEqual({ error: "La contraseña actual no es correcta." });
-			expect((await signIn(user.email, "clave-elegida-1")).error).toBeNull();
+			expect(await changePassword({ error: null }, form("Clave-Elegida-2"))).toEqual({ error: "Escribe tu contraseña actual." });
+			expect(await changePassword({ error: null }, form("Clave-Elegida-2", "Clave-Elegida-2", "No-Es-Esta-9"))).toEqual({ error: "La contraseña actual no es correcta." });
+			expect((await signIn(user.email, "Clave-Elegida-1")).error).toBeNull();
 
-			await expect(changePassword({ error: null }, form("clave-elegida-2", "clave-elegida-2", "clave-elegida-1"))).rejects.toThrow("REDIRECT /account/password?changed=1");
-			expect((await signIn(user.email, "clave-elegida-2")).error).toBeNull();
+			await expect(changePassword({ error: null }, form("Clave-Elegida-2", "Clave-Elegida-2", "Clave-Elegida-1"))).rejects.toThrow("REDIRECT /account/password?changed=1");
+			expect((await signIn(user.email, "Clave-Elegida-2")).error).toBeNull();
 		});
 
 		it("returns readable errors and changes nothing", async () =>
 		{
 			const user = await makeUser("operator");
 			caller = user.client;
-			expect(await changePassword({ error: null }, form("corta"))).toEqual({ error: "Usa al menos 10 caracteres." });
-			expect(await changePassword({ error: null }, form("una frase larga", "distinta"))).toEqual({ error: "Las dos contraseñas no coinciden." });
+			expect(await changePassword({ error: null }, form("corta"))).toEqual({ error: "A tu contraseña le falta: 10 caracteres, una mayúscula, un número y un símbolo." });
+			expect(await changePassword({ error: null }, form("Ectec-2026-pedidos", "distinta"))).toEqual({ error: "Las dos contraseñas no coinciden." });
 			expect(await changePassword({ error: null }, form(user.password))).toEqual({ error: "La contraseña nueva tiene que ser distinta a la actual." });
 			expect(await appMetadata(user.id)).toMatchObject({ must_change_password: true });
 		});

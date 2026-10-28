@@ -1,19 +1,24 @@
 "use client";
 
-import { useActionState } from "react";
-import { AlertCircle } from "lucide-react";
+import { useActionState, useState } from "react";
+import { AlertCircle, Check, Circle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { changePassword, type ChangePasswordState } from "@/lib/auth/actions";
-import { MIN_PASSWORD_LENGTH } from "@/lib/auth/password";
+import { PASSWORD_RULES } from "@/lib/auth/password";
+import { cn } from "@/lib/utils";
 
 const initialState: ChangePasswordState = { error: null };
 
 export function ChangePasswordForm({ forced }: { forced: boolean })
 {
 	const [state, formAction, pending] = useActionState(changePassword, initialState);
+	const [password, setPassword] = useState("");
+	const [confirm, setConfirm] = useState("");
+	const allMet = PASSWORD_RULES.every((rule) => rule.test(password));
+	const mismatch = confirm !== "" && confirm !== password;
 
 	return (
 		<form action={formAction} className="flex flex-col gap-4">
@@ -49,14 +54,26 @@ export function ChangePasswordForm({ forced }: { forced: boolean })
 					name="password"
 					type="password"
 					autoComplete="new-password"
-					minLength={MIN_PASSWORD_LENGTH}
-					aria-describedby="password-hint"
+					value={password}
+					onChange={(e) => setPassword(e.target.value)}
+					aria-describedby="password-rules"
 					required
 					className="h-11 md:h-9"
 				/>
-				<p id="password-hint" className="text-xs text-muted-foreground">
-					Al menos {MIN_PASSWORD_LENGTH} caracteres. Una frase corta es fácil de recordar y difícil de adivinar.
-				</p>
+				{/* Live checklist: the same rules the server and Supabase Auth enforce. */}
+				<ul id="password-rules" aria-label="Requisitos de la contraseña" className="flex flex-col gap-1 text-xs">
+					{PASSWORD_RULES.map((rule) =>
+					{
+						const met = rule.test(password);
+						return (
+							<li key={rule.id} className={cn("flex items-center gap-1.5", met ? "text-status-delivered" : "text-muted-foreground")}>
+								{met ? <Check className="size-3.5" /> : <Circle className="size-3.5" />}
+								{rule.label}
+								<span className="sr-only">{met ? "(cumplido)" : "(pendiente)"}</span>
+							</li>
+						);
+					})}
+				</ul>
 			</div>
 
 			<div className="flex flex-col gap-2">
@@ -66,12 +83,17 @@ export function ChangePasswordForm({ forced }: { forced: boolean })
 					name="confirm"
 					type="password"
 					autoComplete="new-password"
+					value={confirm}
+					onChange={(e) => setConfirm(e.target.value)}
+					aria-invalid={mismatch || undefined}
+					aria-describedby={mismatch ? "confirm-msg" : undefined}
 					required
 					className="h-11 md:h-9"
 				/>
+				{mismatch ? <p id="confirm-msg" className="text-xs font-medium text-destructive">No coincide con la contraseña nueva.</p> : null}
 			</div>
 
-			<Button type="submit" disabled={pending} className="mt-2 h-11 w-full justify-center md:h-9">
+			<Button type="submit" disabled={pending || !allMet || confirm !== password} className="mt-2 h-11 w-full justify-center md:h-9">
 				{pending ? "Guardando…" : forced ? "Guardar y entrar" : "Cambiar contraseña"}
 			</Button>
 		</form>

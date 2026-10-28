@@ -1,4 +1,5 @@
-import { randomBytes } from "node:crypto";
+import { randomInt } from "node:crypto";
+import { unmetPasswordRules } from "@/lib/auth/password";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import type { Role } from "@/lib/rbac";
@@ -38,9 +39,29 @@ export interface CreateUserInTenantError
 	message: string;
 }
 
+// No look-alikes (0/O, 1/l/I) — admins read these out over the phone.
+const UPPER = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+const LOWER = "abcdefghijkmnopqrstuvwxyz";
+const DIGITS = "23456789";
+const SYMBOLS = "!#$%*+-=?@";
+const ALPHABET = UPPER + LOWER + DIGITS + SYMBOLS;
+
+/**
+ * 20 random characters that always meet the password rules (upper, lower,
+ * digit, symbol — lib/auth/password.ts), so Supabase Auth's
+ * password_requirements can't reject an admin-generated one. Rejection
+ * sampling keeps every character uniformly random.
+ */
 export function generatePassword(): string
 {
-	return randomBytes(18).toString("base64url");
+	for (;;)
+	{
+		const password = Array.from({ length: 20 }, () => ALPHABET[randomInt(ALPHABET.length)]).join("");
+		if (unmetPasswordRules(password).length === 0)
+		{
+			return password;
+		}
+	}
 }
 
 /**

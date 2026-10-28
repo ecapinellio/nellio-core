@@ -45,7 +45,7 @@ describe("tenant_id() session revocation", () =>
 		const before = await tenant.operator.from("customers").select("id");
 		expect(before.data).toHaveLength(1);
 
-		await service.auth.admin.updateUserById(tenant.operatorId, { password: "rotated-password-123456" });
+		await service.auth.admin.updateUserById(tenant.operatorId, { password: "Rotated-Pass-2026!" });
 
 		const after = await tenant.operator.from("customers").select("id");
 		expect(after.error).toBeNull();

@@ -17,7 +17,9 @@ export interface TestTenant
 	teardown: () => Promise<void>;
 }
 
-const TEST_PASSWORD = "nellio-test-password-not-real";
+// Meets the password rules (upper, lower, digit, symbol) that Supabase Auth
+// now enforces even on admin-created users.
+const TEST_PASSWORD = "Nellio-Test-Pass-2026!";
 
 function requireEnv(name: string): string
 {

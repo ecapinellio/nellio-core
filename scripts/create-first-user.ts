@@ -30,6 +30,7 @@ import { parseArgs } from "node:util";
 import { createClient } from "@supabase/supabase-js";
 import { createUserInTenant } from "@/lib/users/create-user";
 import { isRole, type Role } from "@/lib/rbac";
+import { newPasswordError } from "@/lib/auth/password";
 
 // Constructs its own client rather than lib/supabase/admin.ts's
 // createAdminClient() — that file is marked "server-only", which throws
@@ -83,6 +84,14 @@ async function main()
 		console.error(
 			"Usage: pnpm bootstrap:admin -- --tenant-name <name> --admin-email <email> --admin-name <name> [--admin-password <password> [--keep-password]] [--role admin|operator|driver] [--tenant-id <existing tenant uuid>]",
 		);
+		process.exit(1);
+	}
+
+	const chosenPassword = values["admin-password"];
+	const passwordProblem = chosenPassword === undefined ? null : newPasswordError(chosenPassword, chosenPassword);
+	if (passwordProblem)
+	{
+		console.error(`--admin-password: ${passwordProblem}`);
 		process.exit(1);
 	}
 

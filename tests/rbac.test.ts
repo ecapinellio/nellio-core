@@ -20,6 +20,13 @@ describe("isRouteAllowed()", () =>
 		}
 	});
 
+	it("allows /products for admin and operator, not driver", () =>
+	{
+		expect(isRouteAllowed("/products", "admin")).toBe(true);
+		expect(isRouteAllowed("/products", "operator")).toBe(true);
+		expect(isRouteAllowed("/products", "driver")).toBe(false);
+	});
+
 	it("allows /admin* only for admin", () =>
 	{
 		expect(isRouteAllowed("/admin/users", "admin")).toBe(true);

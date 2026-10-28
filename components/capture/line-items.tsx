@@ -4,25 +4,15 @@ import { useState } from "react";
 import { Check, X } from "lucide-react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
-import { searchProducts, quickAddProduct, updateProductPricing, type ProductUnit } from "@/lib/supabase/queries";
+import { searchProducts, quickAddProduct, updateProductPricing } from "@/lib/supabase/queries";
+import { UNIT_LABELS, PRODUCT_UNITS, type ProductUnit } from "@/lib/products/units";
 import { calculateLineTotal } from "@/lib/order-math";
 import { EntitySearch } from "@/components/capture/entity-search";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-// Spanish display labels for the English-stored unit values (slice 1's
-// products_unit_check) — same pattern as orders.status: stored in English,
-// displayed in Spanish once a UI layer exists to do it. This is that layer.
-const UNIT_LABELS: Record<ProductUnit, string> = {
-	ton: "Tonelada",
-	kg: "Kg",
-	lb: "Lb",
-	l: "Litro",
-	gal: "Galón",
-	each: "Unidad",
-};
-const UNIT_OPTIONS = Object.keys(UNIT_LABELS) as ProductUnit[];
+const UNIT_OPTIONS = PRODUCT_UNITS;
 
 export interface LineItem
 {

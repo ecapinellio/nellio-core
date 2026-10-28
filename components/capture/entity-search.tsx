@@ -47,6 +47,7 @@ export function EntitySearch<T>({
 	const [results, setResults] = useState<T[]>([]);
 	const [status, setStatus] = useState<"idle" | "loading" | "error" | "done">("idle");
 	const [adding, setAdding] = useState(false);
+	const [addError, setAddError] = useState<string | null>(null);
 	const [retryNonce, setRetryNonce] = useState(0);
 	const requestToken = useRef(0);
 	const wrapperRef = useRef<HTMLDivElement>(null);
@@ -131,11 +132,16 @@ export function EntitySearch<T>({
 			return;
 		}
 		setAdding(true);
+		setAddError(null);
 		const { data, error } = await quickAddFn(supabase, name);
 		setAdding(false);
 		if (error || !data)
 		{
-			setStatus("error");
+			// 23505: a near-duplicate ("CLORO 5 %" vs "Cloro 5%") search didn't
+			// surface — usually a deactivated product, which search hides.
+			setAddError(error?.code === "23505"
+				? `Ya existe un ${quickAddNoun} con ese nombre. Si no aparece en la búsqueda, puede estar desactivado.`
+				: `No se pudo agregar el ${quickAddNoun}.`);
 			return;
 		}
 		select(data);
@@ -179,6 +185,7 @@ export function EntitySearch<T>({
 				onChange={(e) =>
 				{
 					setQuery(e.target.value);
+					setAddError(null);
 					setOpen(true);
 				}}
 				onFocus={() => setOpen(true)}
@@ -212,6 +219,10 @@ export function EntitySearch<T>({
 									</button>
 								</div>
 							)
+							: null}
+
+						{addError
+							? <p className="p-2 text-xs text-destructive">{addError}</p>
 							: null}
 
 						{status === "done" && results.length === 0

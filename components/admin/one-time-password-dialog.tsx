@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRef, useState } from "react";
 import { AlertTriangle, Check, Copy } from "lucide-react";
 import type { Credentials } from "@/app/(app)/admin/users/actions";
 import { roleLabel } from "@/lib/users/role-labels";
+import { useLeaveGuard } from "@/hooks/use-leave-guard";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -20,83 +20,12 @@ const LEAVE_WARNING =
 	"No copiaste la contraseña. Si sales, se pierde y tendrás que restablecerla. ¿Salir de todas formas?";
 
 /**
- * The generated password is shown exactly once and never stored (slice 2
- * design Decision 19). While it hasn't been copied this guards every way
- * out of the page: tab close/reload (beforeunload), in-app links (capture-
- * phase click — the dialog overlay already blocks most of them), and form
- * submits (the header's "Cerrar sesión" is a Server Action form whose
- * redirect never fires beforeunload).
- */
-function useLeaveGuard(active: boolean)
-{
-	const router = useRouter();
-
-	useEffect(() =>
-	{
-		if (!active)
-		{
-			return;
-		}
-
-		function handleBeforeUnload(e: BeforeUnloadEvent)
-		{
-			e.preventDefault();
-			e.returnValue = "";
-		}
-
-		function handleClick(e: MouseEvent)
-		{
-			// Modified/middle clicks and target=_blank open a new tab — this
-			// page (and the password) stays put, so there's nothing to guard.
-			if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)
-			{
-				return;
-			}
-			const anchor = (e.target as HTMLElement).closest("a");
-			if (!anchor || anchor.target === "_blank")
-			{
-				return;
-			}
-			const href = anchor.getAttribute("href");
-			if (!href || href.startsWith("#"))
-			{
-				return;
-			}
-			e.preventDefault();
-			e.stopPropagation();
-			if (window.confirm(LEAVE_WARNING))
-			{
-				router.push(href);
-			}
-		}
-
-		function handleSubmit(e: SubmitEvent)
-		{
-			if (!window.confirm(LEAVE_WARNING))
-			{
-				e.preventDefault();
-				e.stopPropagation();
-			}
-		}
-
-		window.addEventListener("beforeunload", handleBeforeUnload);
-		document.addEventListener("click", handleClick, true);
-		document.addEventListener("submit", handleSubmit, true);
-		return () =>
-		{
-			window.removeEventListener("beforeunload", handleBeforeUnload);
-			document.removeEventListener("click", handleClick, true);
-			document.removeEventListener("submit", handleSubmit, true);
-		};
-	}, [active, router]);
-}
-
-/**
  * The one place a generated password is ever shown — after creating,
  * restoring or reactivating a user (design review D2). Titled with the
  * person's name so an owner reading it out over the phone can't give the
- * wrong one. Can't be dismissed (Esc, outside click) until copied; "Listo"
- * asks first if it wasn't.
+ * wrong one. Shown exactly once and never stored (slice 2 design Decision
+ * 19), so it can't be dismissed (Esc, outside click) until copied, "Listo"
+ * asks first if it wasn't, and every way out of the page asks too.
  */
 export function OneTimePasswordDialog({
 	credentials,
@@ -123,7 +52,7 @@ export function OneTimePasswordDialog({
 		setCopyError(false);
 	}
 
-	useLeaveGuard(credentials !== null && !copied);
+	useLeaveGuard(credentials !== null && !copied, LEAVE_WARNING);
 
 	function requestClose()
 	{

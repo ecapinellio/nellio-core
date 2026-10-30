@@ -190,6 +190,20 @@ verificación en backend.
 ## 7. Reglas al trabajar con Supabase
 
 - `service_role` key: solo en el backend, **nunca** en el navegador. Salta RLS.
+- **La seguridad está en la clave, no en el código.** Los scripts
+  (`bootstrap:admin`, `reset:password`) no otorgan nada sin la clave
+  `service_role`, y quien la tenga no los necesita (con `curl` puede todo).
+  Reglas:
+  - La clave de producción vive solo en `.env.production.local` (ignorado
+    por git) y en Vercel (marcada *Sensitive*). Nunca en el código, GitHub,
+    chats ni WhatsApp.
+  - Para desarrollar se usa Supabase local (claves demo), nunca la de
+    producción. No compartir `.env.production.local` con colaboradores.
+  - 2FA obligatorio en Supabase, Vercel y GitHub (desde ahí se ve la clave).
+  - Si hay sospecha de filtración: crear una clave secreta nueva en
+    Supabase (API Keys), revocar la vieja y actualizar Vercel +
+    `.env.production.local`.
+  - Los cambios de usuarios quedan en Supabase → Authentication → Audit Logs.
 - Probar las políticas RLS **desde la app logueado**, no desde el SQL Editor
   (el editor salta el RLS y muestra todas las filas).
 - Toda tabla nueva con `tenant_id`: activar RLS y crear la política de aislamiento.

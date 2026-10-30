@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "bootstrap:admin": "tsx --env-file=.env.local scripts/create-first-user.ts"
+    "bootstrap:admin": "tsx --env-file=.env.local scripts/create-first-user.ts",
+    "reset:password": "tsx scripts/reset-password.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

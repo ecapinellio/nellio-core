@@ -175,6 +175,11 @@ verificación en backend.
 - **Onboarding del primer usuario (super user):** lo crea el dueño de la
   plataforma vía script server-side con `service_role`. Un usuario no puede
   crearse a sí mismo.
+- **Recuperar el acceso de alguien** (p. ej. el primer admin de un cliente):
+  `pnpm reset:password --email <correo> [--prod]` — contraseña temporal
+  nueva, mostrada una vez, con cambio obligatorio al entrar. `--prod` usa
+  `.env.production.local` y pide confirmación. Los admins restablecen a su
+  propio equipo desde `/admin/users`.
 - **Creación de usuarios subsecuentes:** el admin del tenant los crea a través
   de un endpoint del backend (no directo desde el frontend, que no tiene
   privilegios de admin). **El `tenant_id` del nuevo usuario se hereda del JWT

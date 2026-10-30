@@ -6,7 +6,7 @@ import { setupTenant, type TestTenant } from "@/tests/fixtures";
 import { createUserInTenant } from "@/lib/users/create-user";
 import { BAN_FOREVER } from "@/lib/users/ban";
 import { newPasswordError } from "@/lib/auth/password";
-import { resetPasswordByEmail } from "@/lib/users/reset-password";
+import { findAuthUserByEmail, resetPasswordForUser } from "@/lib/users/reset-password";
 
 type Client = SupabaseClient<Database>;
 
@@ -24,7 +24,7 @@ async function signIn(email: string, password: string)
 	return { client, error };
 }
 
-describe("resetPasswordByEmail() — scripts/reset-password.ts", () =>
+describe("findAuthUserByEmail() / resetPasswordForUser() — scripts/reset-password.ts", () =>
 {
 	let tenant: TestTenant;
 	const createdAuthIds: string[] = [];
@@ -55,7 +55,9 @@ describe("resetPasswordByEmail() — scripts/reset-password.ts", () =>
 		const user = await makeUser();
 		const session = await signIn(user.email, user.password);
 
-		const { data, error } = await resetPasswordByEmail(service, user.email.toUpperCase());
+		const found = await findAuthUserByEmail(service, `  ${user.email.toUpperCase()} `);
+		expect(found!.id).toBe(user.id);
+		const { data, error } = await resetPasswordForUser(service, found!);
 		expect(error).toBeNull();
 		expect(data).toMatchObject({ userId: user.id, role: "admin", tenantId: tenant.tenantId, banned: false });
 		expect(newPasswordError(data!.password, data!.password)).toBeNull();
@@ -73,14 +75,12 @@ describe("resetPasswordByEmail() — scripts/reset-password.ts", () =>
 	{
 		const user = await makeUser();
 		await service.auth.admin.updateUserById(user.id, { ban_duration: BAN_FOREVER });
-		const { data } = await resetPasswordByEmail(service, user.email);
+		const { data } = await resetPasswordForUser(service, (await findAuthUserByEmail(service, user.email))!);
 		expect(data!.banned).toBe(true);
 	});
 
-	it("errors on an unknown email without touching anyone", async () =>
+	it("returns null for an unknown email, searching every page", async () =>
 	{
-		const { data, error } = await resetPasswordByEmail(service, `nadie+${randomUUID()}@test.nellio.local`);
-		expect(data).toBeNull();
-		expect(error).toMatch(/No user with email/);
+		expect(await findAuthUserByEmail(service, `nadie+${randomUUID()}@test.nellio.local`)).toBeNull();
 	});
 });

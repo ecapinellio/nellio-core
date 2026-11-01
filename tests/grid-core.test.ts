@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
 	blocksSave,
 	fillFromPaste,
+	isHeaderLine,
+	matchesSearch,
 	findDuplicates,
 	isProblemIssue,
 	normalizeName,
@@ -39,6 +41,31 @@ describe("generic grid core", () =>
 		const result = fillFromPaste(contactModel, [contactModel.emptyRow("a")], 0, "name", "Ana\t2222-3333\textra\nBeto\t7777-8888", newKey)!;
 		expect(result.rows.map((r) => [r.name, r.phone])).toEqual([["Ana", "2222-3333"], ["Beto", "7777-8888"]]);
 		expect(result.extraColumns).toBe(1);
+	});
+
+	it("skips a pasted header row, but never a real row", () =>
+	{
+		const labels = ["Nombre", "Teléfono", "Cliente"];
+		const result = fillFromPaste(contactModel, [contactModel.emptyRow("a")], 0, "name", "CLIENTE\tTelefono\nAna\t2222-3333\n", newKey, labels)!;
+		expect(result.skippedHeader).toBe(true);
+		expect(result.rows.map((r) => r.name)).toEqual(["Ana"]);
+		expect(result.filled).toBe(1);
+		// Has a digit, or matches no label: a customer, not a header.
+		expect(isHeaderLine("Nombre\t2222-3333", labels)).toBe(false);
+		expect(isHeaderLine("Ferretería López\tSoyapango", labels)).toBe(false);
+		// Without labels nothing is ever skipped.
+		expect(fillFromPaste(contactModel, [contactModel.emptyRow("a")], 0, "name", "Nombre\nAna", newKey)!.skippedHeader).toBe(false);
+	});
+
+	it("searches by name, or by phone/NIT digits when the model provides them", () =>
+	{
+		const model = { ...contactModel, searchDigitsOf: (r: ContactRow) => r.phone };
+		const ana = { ...saved("Ana López"), phone: "2222-3333" };
+		expect(matchesSearch(model, ana, "lopez")).toBe(true);
+		expect(matchesSearch(model, ana, "22223333")).toBe(true);
+		expect(matchesSearch(model, ana, "2222-33")).toBe(true);
+		expect(matchesSearch(model, ana, "999")).toBe(false);
+		expect(matchesSearch(contactModel, ana, "2222")).toBe(false);
 	});
 
 	it("flags duplicates by the model's name, ignoring case, accents and spaces", () =>

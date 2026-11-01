@@ -47,6 +47,23 @@ export interface GridModel<T extends BaseRow, C extends string>
 	nameOf: (row: T) => string;
 	/** Name as loaded; null for rows created in the grid. */
 	originalNameOf: (row: T) => string | null;
+	/** Other fields the search box matches by digits (phone, NIT); name only when absent. */
+	searchDigitsOf?: (row: T) => string;
+}
+
+/**
+ * Search box match: the name (ignoring case/accents/spaces), or — when the
+ * query has 4+ digits — the row's phone/NIT digits ("2222-3333" = "22223333").
+ */
+export function matchesSearch<T extends BaseRow, C extends string>(model: GridModel<T, C>, row: T, search: string): boolean
+{
+	const needle = normalizeName(search);
+	if (needle === "" || normalizeName(model.nameOf(row)).includes(needle))
+	{
+		return true;
+	}
+	const digits = search.replace(/\D/g, "");
+	return digits.length >= 4 && model.searchDigitsOf !== undefined && model.searchDigitsOf(row).replace(/\D/g, "").includes(digits);
 }
 
 /**
@@ -72,7 +89,23 @@ export interface PasteResult<T, C>
 	filled: number;
 	/** Columns beyond the last pasteable one that were dropped. */
 	extraColumns: number;
+	/** The first line was the sheet's header row ("Nombre, Teléfono…") and was skipped. */
+	skippedHeader: boolean;
 	column: C;
+}
+
+/**
+ * A copied Excel range often includes its header row. It's a header when
+ * some cell is one of our column labels (or a known alias) and no cell has
+ * a digit — a real row always has a name, and labels never have numbers.
+ */
+export function isHeaderLine(line: string, labels: readonly string[]): boolean
+{
+	const known = new Set(labels.map(normalizeName));
+	const cells = line.split("\t").map((c) => c.trim()).filter((c) => c !== "");
+	return cells.length > 0
+		&& !cells.some((c) => /\d/.test(c))
+		&& cells.some((c) => known.has(normalizeName(c)));
 }
 
 /**
@@ -88,6 +121,7 @@ export function fillFromPaste<T extends BaseRow, C extends string>(
 	column: C,
 	text: string,
 	newKey: () => string,
+	headerLabels: readonly string[] = [],
 ): PasteResult<T, C> | null
 {
 	const lines = text.replace(/\r\n?/g, "\n").split("\n");
@@ -98,6 +132,11 @@ export function fillFromPaste<T extends BaseRow, C extends string>(
 	if (lines.length === 0 || (lines.length === 1 && !lines[0].includes("\t")))
 	{
 		return null;
+	}
+	const skippedHeader = isHeaderLine(lines[0], headerLabels);
+	if (skippedHeader)
+	{
+		lines.shift();
 	}
 
 	const startCol = model.columns.indexOf(column);
@@ -126,7 +165,7 @@ export function fillFromPaste<T extends BaseRow, C extends string>(
 		next[target] = row;
 	});
 
-	return { rows: next, filled: lines.length, extraColumns: Math.max(0, extraColumns), column };
+	return { rows: next, filled: lines.length, extraColumns: Math.max(0, extraColumns), skippedHeader, column };
 }
 
 /**

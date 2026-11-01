@@ -36,6 +36,7 @@ export type Database = {
     Tables: {
       customers: {
         Row: {
+          active: boolean
           address: string | null
           cod_actividad: string | null
           created_at: string
@@ -49,9 +50,11 @@ export type Database = {
           tax_id: string | null
           tenant_id: string
           updated_at: string
+          updated_by: string | null
         }
         ComputedFields: never
         Insert: {
+          active?: boolean
           address?: string | null
           cod_actividad?: string | null
           created_at?: string
@@ -65,8 +68,10 @@ export type Database = {
           tax_id?: string | null
           tenant_id: string
           updated_at?: string
+          updated_by?: string | null
         }
         Update: {
+          active?: boolean
           address?: string | null
           cod_actividad?: string | null
           created_at?: string
@@ -80,6 +85,7 @@ export type Database = {
           tax_id?: string | null
           tenant_id?: string
           updated_at?: string
+          updated_by?: string | null
         }
         Relationships: [
           {
@@ -87,6 +93,13 @@ export type Database = {
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customers_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -385,10 +398,13 @@ export type Database = {
           role: string
         }[]
       }
-      normalize_product_name: { Args: { p_name: string }; Returns: string }
+      normalize_name: { Args: { p_name: string }; Returns: string }
+      normalize_nrc: { Args: { p_value: string }; Returns: string }
+      normalize_tax_id: { Args: { p_value: string }; Returns: string }
       quick_add_customer: {
         Args: { p_name: string }
         Returns: {
+          active: boolean
           address: string | null
           cod_actividad: string | null
           created_at: string
@@ -402,6 +418,7 @@ export type Database = {
           tax_id: string | null
           tenant_id: string
           updated_at: string
+          updated_by: string | null
         }
         SetofOptions: {
           from: "*"
@@ -431,10 +448,12 @@ export type Database = {
         }
       }
       role: { Args: Record<PropertyKey, never>; Returns: string }
+      save_customers: { Args: { p_rows: Json }; Returns: Json }
       save_products: { Args: { p_rows: Json }; Returns: Json }
       search_customers: {
         Args: { p_limit?: number; p_query: string }
         Returns: {
+          active: boolean
           address: string | null
           cod_actividad: string | null
           created_at: string
@@ -448,6 +467,7 @@ export type Database = {
           tax_id: string | null
           tenant_id: string
           updated_at: string
+          updated_by: string | null
         }[]
         SetofOptions: {
           from: "*"

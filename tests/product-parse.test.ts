@@ -6,12 +6,12 @@ import {
 	fillFromPaste,
 	findDuplicates,
 	isDirty,
-	normalizeProductName,
 	rowFromProduct,
 	rowIssues,
 	toSavePayload,
 	type GridRow,
 } from "@/lib/products/grid";
+import { normalizeName } from "@/lib/grid/core";
 
 function keys()
 {
@@ -95,9 +95,9 @@ describe("parseUnit() — fixed synonym table", () =>
 	});
 });
 
-describe("normalizeProductName() — same spec as the SQL helper", () =>
+describe("normalizeName() — same spec as the SQL helper", () =>
 {
-	// Mirrored in tests/save-products.test.ts against normalize_product_name().
+	// Mirrored in tests/save-products.test.ts against normalize_name().
 	it.each([
 		["Cloro 5%", "cloro5%"],
 		["CLORO 5 %", "cloro5%"],
@@ -106,7 +106,7 @@ describe("normalizeProductName() — same spec as the SQL helper", () =>
 		["Niño", "nino"],
 	])("%s → %s", (name, norm) =>
 	{
-		expect(normalizeProductName(name)).toBe(norm);
+		expect(normalizeName(name)).toBe(norm);
 	});
 });
 

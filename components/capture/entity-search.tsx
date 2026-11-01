@@ -17,6 +17,8 @@ interface EntitySearchProps<T>
 	searchFn: (supabase: SupabaseClient<Database>, query: string, limit?: number) => Promise<QueryResult<T[]>>;
 	quickAddFn: (supabase: SupabaseClient<Database>, name: string) => Promise<QueryResult<T>>;
 	getLabel: (item: T) => string;
+	/** Optional second line, e.g. "Dirección · Teléfono" to tell branches apart. */
+	getDetail?: (item: T) => string | null;
 	getId: (item: T) => string;
 	onSelect: (item: T) => void;
 	quickAddNoun: string;
@@ -36,6 +38,7 @@ export function EntitySearch<T>({
 	searchFn,
 	quickAddFn,
 	getLabel,
+	getDetail,
 	getId,
 	onSelect,
 	quickAddNoun,
@@ -138,9 +141,10 @@ export function EntitySearch<T>({
 		if (error || !data)
 		{
 			// 23505: a near-duplicate ("CLORO 5 %" vs "Cloro 5%") search didn't
-			// surface — usually a deactivated product, which search hides.
+			// surface — usually a deactivated one, which search hides. The
+			// quick_add_* RPCs say which in Spanish; fall back for older ones.
 			setAddError(error?.code === "23505"
-				? `Ya existe un ${quickAddNoun} con ese nombre. Si no aparece en la búsqueda, puede estar desactivado.`
+				? (error.message.startsWith("Ya existe") ? error.message : `Ya existe un ${quickAddNoun} con ese nombre. Si no aparece en la búsqueda, puede estar desactivado.`)
 				: `No se pudo agregar el ${quickAddNoun}.`);
 			return;
 		}
@@ -247,10 +251,13 @@ export function EntitySearch<T>({
 								onMouseDown={(e) => e.preventDefault()}
 								onClick={() => select(item)}
 								className={cn(
-									"flex w-full items-center justify-between rounded-sm p-2 text-left text-sm hover:bg-accent",
+									"flex w-full flex-col items-start rounded-sm p-2 text-left text-sm hover:bg-accent",
 								)}
 							>
 								<span className="font-medium">{getLabel(item)}</span>
+								{getDetail?.(item)
+									? <span className="w-full truncate text-xs text-muted-foreground">{getDetail(item)}</span>
+									: null}
 							</button>
 						))}
 					</div>,

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	blocksSave,
 	fillFromPaste,
+	matchesSearch,
 	findDuplicates,
 	isProblemIssue,
 	normalizeName,
@@ -58,6 +59,8 @@ export interface EditableGridOptions<T extends BaseRow, C extends string, R, S, 
 	/** The pasteable name column — pasting over saved names asks first. */
 	nameColumn: C;
 	columnLabels: Record<C, string>;
+	/** Extra header spellings to recognize in a pasted header row ("Cliente", "DUI"…). */
+	headerAliases?: readonly string[];
 	/** Entity-specific counts for the paste toast, e.g. "2 precios por revisar". */
 	pasteSummary: (touched: T[], info: { duplicates: Map<string, string>; ctx: X }) => { parts: string[]; attention: number };
 	/** The entity's "incomplete" filter chip ("Sin precio" / "Solo nombre"). */
@@ -68,6 +71,11 @@ export interface EditableGridOptions<T extends BaseRow, C extends string, R, S, 
 	leaveWarning: string;
 	/** Extra resets when the server sends fresh records (e.g. close a sheet). */
 	onReset?: (records: R[]) => void;
+}
+
+function headerLabelsOf(o: { columnLabels: Record<string, string>; headerAliases?: readonly string[] }): string[]
+{
+	return [...Object.values(o.columnLabels), ...(o.headerAliases ?? [])];
 }
 
 function plural(n: number, one: string, many: string): string
@@ -157,7 +165,7 @@ export function useEditableGrid<T extends BaseRow, C extends string, R, S, K ext
 			{
 				return problemFilter.has(r.key);
 			}
-			if (needle && !normalizeName(model.nameOf(r)).includes(needle))
+			if (!matchesSearch(model, r, search))
 			{
 				return false;
 			}
@@ -212,7 +220,7 @@ export function useEditableGrid<T extends BaseRow, C extends string, R, S, K ext
 		const shown = key === null ? all : shownRows;
 		const start = key === null ? all.findIndex(model.isBlank) : shown.findIndex((r) => r.key === key);
 		// Fill down the rows the user SEES (filters may hide some).
-		const result = fillFromPaste(model, shown, start, column, text, newKey);
+		const result = fillFromPaste(model, shown, start, column, text, newKey, headerLabelsOf(opts.current));
 		if (!result)
 		{
 			return false;
@@ -236,6 +244,7 @@ export function useEditableGrid<T extends BaseRow, C extends string, R, S, K ext
 		const nDup = touched.filter((r) => dupes.has(r.key)).length;
 		const entity = o.pasteSummary(touched, { duplicates: dupes, ctx: o.buildContext(next) });
 		const parts = [`Pegaste ${plural(result.filled - dropped, "fila", "filas")} en ${o.columnLabels[column]}`];
+		if (result.skippedHeader) parts.push("se omitió la fila de encabezados");
 		if (dropped) parts.push(`${plural(dropped, "fila no entró", "filas no entraron")} (quita el filtro para agregar filas nuevas)`);
 		if (nDup) parts.push(plural(nDup, "repetido", "repetidos"));
 		parts.push(...entity.parts);
@@ -252,7 +261,7 @@ export function useEditableGrid<T extends BaseRow, C extends string, R, S, K ext
 			const shown = latest.current.visible;
 			const start = shown.findIndex((r) => r.key === key);
 			let probe = 0;
-			const preview = fillFromPaste(model, shown, start, column, text, () => `probe-${probe++}`);
+			const preview = fillFromPaste(model, shown, start, column, text, () => `probe-${probe++}`, headerLabelsOf(opts.current));
 			if (!preview)
 			{
 				return false;

@@ -20,11 +20,14 @@ describe("isRouteAllowed()", () =>
 		}
 	});
 
-	it("allows /products for admin and operator, not driver", () =>
+	it("allows /products and /customers for admin and operator, not driver", () =>
 	{
-		expect(isRouteAllowed("/products", "admin")).toBe(true);
-		expect(isRouteAllowed("/products", "operator")).toBe(true);
-		expect(isRouteAllowed("/products", "driver")).toBe(false);
+		for (const path of ["/products", "/customers"])
+		{
+			expect(isRouteAllowed(path, "admin")).toBe(true);
+			expect(isRouteAllowed(path, "operator")).toBe(true);
+			expect(isRouteAllowed(path, "driver")).toBe(false);
+		}
 	});
 
 	it("allows /admin* only for admin", () =>

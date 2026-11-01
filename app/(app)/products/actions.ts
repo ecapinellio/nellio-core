@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { saveProductsRpc, type SaveConflict } from "@/lib/products/catalog";
 import { getActiveUser } from "@/lib/auth/active-user";
+import { UNAUTHORIZED, saveRpcErrorMessage } from "@/lib/grid/rpc-errors";
 import { saveRowError, MAX_SAVE_ROWS, type SaveRow } from "@/lib/products/grid";
 
 export type SaveProductsResult =
@@ -11,8 +12,6 @@ export type SaveProductsResult =
 	| { status: "conflicts"; conflicts: SaveConflict[] }
 	| { status: "error"; error: string };
 
-const UNAUTHORIZED = "No autorizado.";
-const GENERIC_ERROR = "No se pudo guardar. Revisa tu conexión e intenta de nuevo.";
 
 /**
  * The catalog grid's only write path. Runs with the caller's own session
@@ -51,7 +50,7 @@ export async function saveProducts(rows: SaveRow[]): Promise<SaveProductsResult>
 	const { data, error } = await saveProductsRpc(supabase, rows);
 	if (error || !data)
 	{
-		return { status: "error", error: rpcErrorMessage(error?.code, error?.message) };
+		return { status: "error", error: saveRpcErrorMessage(error?.code, error?.message, "Un producto ya no existe. Recarga la página.") };
 	}
 
 	if (data.conflicts.length > 0)
@@ -61,26 +60,4 @@ export async function saveProducts(rows: SaveRow[]): Promise<SaveProductsResult>
 
 	revalidatePath("/products");
 	return { status: "saved", saved: data.saved };
-}
-
-// save_products() raises its user-facing messages in Spanish (validation,
-// duplicates); everything else collapses to a fixed string.
-function rpcErrorMessage(code: string | undefined, message: string | undefined): string
-{
-	switch (code)
-	{
-		case "28000":
-		case "42501":
-			return UNAUTHORIZED;
-		case "P0002":
-			return "Un producto ya no existe. Recarga la página.";
-		case "23505":
-		case "22001":
-		case "22003":
-		case "22004":
-		case "22023":
-			return message ?? GENERIC_ERROR;
-		default:
-			return GENERIC_ERROR;
-	}
 }

@@ -73,9 +73,6 @@ export function isDirty(row: GridRow): boolean
 	return row.name !== o.name || row.price !== o.price || row.unit !== o.unit || row.active !== o.active || row.unitRaw !== null;
 }
 
-/** Same spec as the SQL normalize_product_name() — see core.normalizeName. */
-export const normalizeProductName = core.normalizeName;
-
 export type PasteResult = core.PasteResult<GridRow, GridColumn>;
 
 /** Fills down / right from a paste (design D7). See core.fillFromPaste. */

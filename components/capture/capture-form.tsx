@@ -178,10 +178,11 @@ export function CaptureForm()
 							: (
 								<EntitySearch
 									supabase={supabase}
-									placeholder="Buscar o agregar cliente..."
+									placeholder="Buscar cliente, teléfono o NIT..."
 									searchFn={searchCustomers}
 									quickAddFn={quickAddCustomer}
 									getLabel={(c) => c.name}
+									getDetail={(c) => [c.address, c.phone].filter(Boolean).join(" · ") || null}
 									getId={(c) => c.id}
 									quickAddNoun="cliente"
 									onSelect={setCustomer}

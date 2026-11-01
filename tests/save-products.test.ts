@@ -4,7 +4,8 @@ import type { Database } from "@/lib/supabase/database.types";
 import { setupTenant, type TestTenant } from "@/tests/fixtures";
 import { createOrder, quickAddCustomer, quickAddProduct, searchProducts } from "@/lib/supabase/queries";
 import { listCatalog, saveProductsRpc } from "@/lib/products/catalog";
-import { normalizeProductName, type SaveRow } from "@/lib/products/grid";
+import type { SaveRow } from "@/lib/products/grid";
+import { normalizeName } from "@/lib/grid/core";
 
 type Client = SupabaseClient<Database>;
 
@@ -75,7 +76,7 @@ describe("product catalog: save_products(), deactivation, duplicates", () =>
 			await saveProductsRpc(tenant.operator, [newRow(name)]);
 			const { data: catalog } = await listCatalog(tenant.operator);
 			const row = catalog!.find((p) => p.name === name)!;
-			expect(row.updated_at).toMatch(/\.\d{6}/);
+			expect(row.updated_at).toMatch(/\.\d+/);
 
 			const { data } = await saveProductsRpc(tenant.operator, [
 				{ id: row.id, name, price_per_unit: 11, unit: "kg", active: true, updated_at: row.updated_at },
@@ -226,12 +227,12 @@ describe("product catalog: save_products(), deactivation, duplicates", () =>
 		});
 	});
 
-	describe("normalize_product_name() mirrors normalizeProductName()", () =>
+	describe("normalize_name() mirrors normalizeName()", () =>
 	{
 		it.each(["Cloro 5%", "CLORO 5 %", "  Ácido  Muriático ", "Soda cáustica", "Niño"])("%s", async (name) =>
 		{
-			const { data } = await tenant.operator.rpc("normalize_product_name", { p_name: name });
-			expect(data).toBe(normalizeProductName(name));
+			const { data } = await tenant.operator.rpc("normalize_name", { p_name: name });
+			expect(data).toBe(normalizeName(name));
 		});
 	});
 

@@ -56,7 +56,8 @@ de la app.
 - `users` — gente de la empresa que usa el sistema. Ligada a `auth.users`.
   Roles: `admin` | `operator` | `driver`.
 - `customers` — empresas externas que le compran a la empresa (las que mandan
-  los pedidos caóticos). **No son usuarios.** Incluye datos fiscales del
+  los pedidos caóticos). **No son usuarios.** Nombre único por tenant (cada
+  sucursal es su propio cliente); el NIT puede repetirse entre sucursales. Incluye datos fiscales del
   **receptor** del DTE (opcionales).
 - `products` — catálogo. Sin stock (inventario se modela post-discovery).
 - `orders` — cabecera del pedido. Guarda el mensaje original en `notes`.
@@ -239,8 +240,11 @@ ruta de `lib/rbac.ts`, y la creación de usuarios por el admin
 la gestión de usuarios (restablecer/desactivar/reactivar, `list_tenant_users()`),
 la revocación de sesión de `tenant_id()` (ADR-009), y el catálogo de productos
 (`save_products()`: guardado en lote, conflictos, repetidos, productos
-desactivados; y la lógica pura de la tabla en `lib/products/`), y el cambio
-de contraseña obligatorio al primer ingreso (`must_change_password`).
+desactivados; y la lógica pura de la tabla en `lib/products/`), los clientes
+(`save_customers()`: formatos de NIT/NRC, NIT compartido, solo actualiza los
+campos enviados, conflictos; búsqueda por teléfono/NIT; y `lib/customers/`),
+la tabla genérica (`lib/grid/core.ts`), y el cambio de contraseña obligatorio
+al primer ingreso (`must_change_password`).
 
 **CI:** `.github/workflows/test.yml` corre la suite en cada push/PR contra un
 stack de Supabase local efímero (sin secrets — son las keys demo locales).

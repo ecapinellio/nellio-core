@@ -15,7 +15,7 @@ import {
 	type GridColumn,
 	type GridRow,
 } from "@/lib/products/grid";
-import { UNIT_LABELS, isProductUnit, type ProductUnit } from "@/lib/products/units";
+import { PRODUCT_UNITS, UNIT_LABELS, isProductUnit, type ProductUnit } from "@/lib/products/units";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
@@ -32,11 +32,12 @@ import { useEditableGrid } from "@/components/grid/use-editable-grid";
 import { EmptyFilter, GridToastView, GridToolbar, PasteRenameDialog, SaveBar } from "@/components/grid/grid-chrome";
 import { ConflictDialog } from "@/components/grid/conflict-dialog";
 import { CatalogRow, type RowHandlers } from "@/components/products/catalog-row";
-import { PasteGuide } from "@/components/products/paste-guide";
+import { PasteGuide } from "@/components/grid/paste-guide";
 import { ProductEditSheet } from "@/components/products/product-edit-sheet";
 
 const NOUNS = { one: "producto", many: "productos" };
 const COLUMN_LABELS: Record<GridColumn, string> = { name: "Nombre", price: "Precio", unit: "Unidad" };
+const HEADER_ALIASES = ["Producto", "Productos", "Descripción", "Precio unitario", "Unidad de medida"];
 const LEAVE_WARNING = "Tienes cambios sin guardar en el catálogo. Si sales, se pierden. ¿Salir de todas formas?";
 
 interface UnitPrompt
@@ -92,6 +93,7 @@ export function CatalogManager({ products }: { products: CatalogProduct[] })
 		issuesOf,
 		nameColumn: "name",
 		columnLabels: COLUMN_LABELS,
+		headerAliases: HEADER_ALIASES,
 		pasteSummary,
 		incomplete: isNoPrice,
 		toPayload: toSavePayload,
@@ -167,7 +169,27 @@ export function CatalogManager({ products }: { products: CatalogProduct[] })
 				</div>
 			</header>
 
-			{guideOpen ? <div className="hidden md:block"><PasteGuide onClose={() => setGuideOpen(false)} /></div> : null}
+			{guideOpen
+				? (
+					<div className="hidden md:block">
+						<PasteGuide
+							title="Carga tu catálogo desde Excel"
+							steps={[
+								<>En Excel, selecciona y copia la columna de <strong>nombres</strong>.</>,
+								<>Haz clic en la primera celda de <strong>Nombre</strong> y pega (Ctrl+V).</>,
+								<>Repite con <strong>Precio</strong> y <strong>Unidad</strong>. También puedes copiar las 3 columnas juntas.</>,
+							]}
+							example={[
+								{ header: "Nombre", value: "Cloro 5%", width: "7rem" },
+								{ header: "Precio", value: "12.50", numeric: true, width: "4rem" },
+								{ header: "Unidad", value: "Galón", width: "4.5rem" },
+							]}
+							footnote={`Unidades válidas: ${PRODUCT_UNITS.map((u) => UNIT_LABELS[u]).join(", ")}. Los precios con punto decimal: 1,250.00.`}
+							onClose={() => setGuideOpen(false)}
+						/>
+					</div>
+				)
+				: null}
 
 			<p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground md:hidden">
 				Para cargar varios productos desde Excel, usa una computadora.

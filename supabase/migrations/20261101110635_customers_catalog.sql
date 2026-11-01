@@ -61,6 +61,15 @@ begin
     raise exception 'Máximo 1000 productos por guardado.' using errcode = '22023';
   end if;
 
+  -- Lock every edited row up front in id order: locking in grid order let
+  -- two concurrent saves grab the same rows in opposite orders and deadlock.
+  perform 1
+  from public.products p
+  where p.tenant_id = v_tenant_id
+    and p.id in (select nullif(r->>'id', '')::uuid from jsonb_array_elements(p_rows) r)
+  order by p.id
+  for update;
+
   -- 1. Validate every row before touching anything.
   for v_row in select * from jsonb_array_elements(p_rows)
   loop
@@ -300,8 +309,9 @@ create unique index customers_tenant_name_uniq
 -- Fiscal field formats (D6, outside voice #3), mirrored in lib/customers/parse.ts
 -- ============================================================
 -- NIT (14 digits) or DUI (9). Excel drops a leading zero from numeric cells,
--- so 13 and 8 digits get it back. Returns the canonical dashed form, or
--- null if it isn't a NIT/DUI. No check-digit validation.
+-- so 13 and 8 digits get it back — 8 only when the DUI check digit matches,
+-- since an 8-digit phone in the NIT column isn't a DUI. Returns the
+-- canonical dashed form, or null if it isn't a NIT/DUI.
 create or replace function public.normalize_tax_id(p_value text)
 returns text
 language sql
@@ -309,9 +319,20 @@ immutable
 parallel safe
 set search_path = ''
 as $$
-  with digits as (
-    select case length(d) when 13 then '0' || d when 8 then '0' || d else d end as d
-    from (select regexp_replace(coalesce(p_value, ''), '[^0-9]', '', 'g') as d) raw
+  with raw as (
+    select regexp_replace(coalesce(p_value, ''), '[^0-9]', '', 'g') as d
+  ),
+  digits as (
+    select case
+      when length(d) = 13 then '0' || d
+      when length(d) = 8 then
+        case when (10 - (
+            select sum(substr('0' || d, i, 1)::int * (10 - i)) from generate_series(1, 8) i
+          ) % 10) % 10 = right(d, 1)::int
+        then '0' || d end
+      else d
+    end as d
+    from raw
   )
   select case length(d)
     when 14 then format('%s-%s-%s-%s', substr(d, 1, 4), substr(d, 5, 6), substr(d, 11, 3), substr(d, 14, 1))
@@ -382,8 +403,13 @@ stable
 security invoker
 set search_path = ''
 as $$
+  -- Digit matching only for number-like queries: "Ferretería 2000" is a
+  -- name search, not phones containing 2000.
   with q as (
-    select regexp_replace(coalesce(p_query, ''), '[^0-9]', '', 'g') as digits
+    select case when btrim(coalesce(p_query, '')) ~ '^[0-9 +().-]+$'
+      then regexp_replace(p_query, '[^0-9]', '', 'g')
+      else ''
+    end as digits
   )
   select c.*
   from public.customers c, q
@@ -507,6 +533,15 @@ begin
     raise exception 'Máximo 1000 clientes por guardado.' using errcode = '22023';
   end if;
 
+  -- Lock every edited row up front in id order (no deadlock between two
+  -- concurrent saves whose grids list the rows in different orders).
+  perform 1
+  from public.customers c
+  where c.tenant_id = v_tenant_id
+    and c.id in (select nullif(r->>'id', '')::uuid from jsonb_array_elements(p_rows) r)
+  order by c.id
+  for update;
+
   -- 1. Validate (and canonicalize) every row before touching anything.
   for v_row in select * from jsonb_array_elements(p_rows)
   loop
@@ -563,9 +598,10 @@ begin
       raise exception 'Un dato fiscal de "%" es demasiado largo.', v_name using errcode = '22001';
     end if;
 
-    -- Formats: on new rows, or when the field changed.
+    -- Formats: on new rows, or when the field changed (compared trimmed, as
+    -- the grid sends it, so legacy whitespace doesn't count as a change).
     v_value := nullif(btrim(coalesce(v_row->>'tax_id', '')), '');
-    if v_row ? 'tax_id' and v_value is not null and (v_new or v_value is distinct from v_current.tax_id) then
+    if v_row ? 'tax_id' and v_value is not null and (v_new or v_value is distinct from btrim(v_current.tax_id)) then
       if public.normalize_tax_id(v_value) is null then
         raise exception 'El NIT o DUI de "%" no es válido.', v_name using errcode = '22023';
       end if;
@@ -573,7 +609,7 @@ begin
     end if;
 
     v_value := nullif(btrim(coalesce(v_row->>'nrc', '')), '');
-    if v_row ? 'nrc' and v_value is not null and (v_new or v_value is distinct from v_current.nrc) then
+    if v_row ? 'nrc' and v_value is not null and (v_new or v_value is distinct from btrim(v_current.nrc)) then
       if public.normalize_nrc(v_value) is null then
         raise exception 'El NRC de "%" no es válido.', v_name using errcode = '22023';
       end if;
@@ -581,13 +617,13 @@ begin
     end if;
 
     v_value := nullif(btrim(coalesce(v_row->>'email', '')), '');
-    if v_row ? 'email' and v_value is not null and (v_new or v_value is distinct from v_current.email)
+    if v_row ? 'email' and v_value is not null and (v_new or v_value is distinct from btrim(v_current.email))
       and v_value !~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' then
       raise exception 'El correo de "%" no es válido.', v_name using errcode = '22023';
     end if;
 
     v_value := nullif(btrim(coalesce(v_row->>'cod_actividad', '')), '');
-    if v_row ? 'cod_actividad' and v_value is not null and (v_new or v_value is distinct from v_current.cod_actividad)
+    if v_row ? 'cod_actividad' and v_value is not null and (v_new or v_value is distinct from btrim(v_current.cod_actividad))
       and v_value !~ '^[0-9]{5,6}$' then
       raise exception 'El código de actividad de "%" no es válido (5 o 6 dígitos).', v_name using errcode = '22023';
     end if;

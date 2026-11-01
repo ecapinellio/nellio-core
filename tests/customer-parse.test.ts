@@ -41,6 +41,8 @@ describe("normalizeTaxId() — NIT or DUI (D6), Excel's lost zero (outside voice
 		expect(normalizeTaxId("N/A")).toBeNull();
 		expect(normalizeTaxId("12345")).toBeNull();
 		expect(normalizeTaxId("061401019010133")).toBeNull();
+		// An 8-digit phone in the NIT column is not a DUI missing its zero.
+		expect(normalizeTaxId("2222-3333")).toBeNull();
 	});
 });
 

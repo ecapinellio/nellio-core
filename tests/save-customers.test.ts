@@ -98,6 +98,9 @@ describe("customers: save_customers(), formats, deactivation, capture search", (
 			const { error } = await saveCustomersRpc(tenant.operator, [await editOf(legacy, { phone: "2222-1111" })]);
 			expect(error).toBeNull();
 			expect((await customer(tenant.admin, legacy)).tax_id).toBe("NIT pendiente");
+			// Legacy whitespace isn't a "change": the grid sends values trimmed.
+			await tenant.admin.from("customers").update({ email: " x@y " }).eq("id", c.id);
+			expect((await saveCustomersRpc(tenant.operator, [await editOf(legacy, { phone: "2222-2222", email: "x@y" })])).error).toBeNull();
 		});
 
 		it("is all-or-nothing, takes tenant from the JWT, rejects foreign ids and drivers", async () =>
@@ -158,7 +161,7 @@ describe("customers: save_customers(), formats, deactivation, capture search", (
 
 	describe("normalize_tax_id() / normalize_name() mirror the TS rules", () =>
 	{
-		it.each(["0614-010190-101-3", "6140101901013", "12345678", "01234567-8", "N/A", "123"])("%s", async (value) =>
+		it.each(["0614-010190-101-3", "6140101901013", "12345678", "2222-3333", "01234567-8", "N/A", "123"])("%s", async (value) =>
 		{
 			const { data } = await tenant.operator.rpc("normalize_tax_id", { p_value: value });
 			expect(data).toBe(normalizeTaxId(value)?.value ?? null);
@@ -206,6 +209,11 @@ describe("customers: save_customers(), formats, deactivation, capture search", (
 			expect((await searchCustomers(tenant.operator, "0511-999999-101-1")).data!.map((x) => x.id)).toContain(c.id);
 			// A phone match ranks first even among many name/NIT matches.
 			expect((await searchCustomers(tenant.operator, "77889911")).data![0].id).toBe(c.id);
+			// A name with a number is a name search, not a phone search.
+			const other = unique("Zeta");
+			await saveCustomersRpc(tenant.operator, [newRow(other, { phone: "2000-4455" })]);
+			const z = await customer(tenant.operator, other);
+			expect((await searchCustomers(tenant.operator, "Ferretería 2000")).data!.map((x) => x.id)).not.toContain(z.id);
 		});
 
 		it("quick-add explains a duplicate, and points to reactivation when it's deactivated (outside voice #6)", async () =>

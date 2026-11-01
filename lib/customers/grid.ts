@@ -118,8 +118,7 @@ export const customerGridModel: GridModel<CustomerRow, CustomerColumn> = {
 	applyPasted: applyPastedCustomerCell,
 	nameOf: (row) => row.name,
 	originalNameOf: (row) => row.original?.name ?? null,
-	// Separated so a query can't match across the phone/NIT boundary.
-	searchDigitsOf: (row) => `${row.phone.replace(/\D/g, "")} ${row.tax_id.replace(/\D/g, "")}`,
+	searchDigitsOf: (row) => [row.phone, row.tax_id],
 };
 
 /** Who holds each NIT/DUI — over ALL loaded rows, inactive included (design D5). */

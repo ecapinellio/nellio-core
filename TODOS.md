@@ -340,6 +340,37 @@ beyond that initial render and paste fill get slow.
 **Priority:** P3
 **Depends on:** Product catalog page shipped.
 
+### Swapping two names in one grid save fails with "Ya existe"
+
+**What:** Renaming A→B and B→A (or A→B, B→C with A first) in one save of
+`/customers` or `/products` raises `unique_violation`, shown as "Ya existe un
+cliente con ese nombre." — the friendly pre-check allows it, but the writes
+run row by row against a non-deferrable unique index.
+
+**Why:** Rare (found by the customers `/review`, 2026-11-01), and the
+workaround is two saves. Fix: write renamed rows to a temporary name
+(`name || ' ' || id`) first, then the final names.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Nothing.
+
+### Format rules only hold through the save RPCs (direct table writes skip them)
+
+**What:** `customers` still grants INSERT/UPDATE through PostgREST (RLS:
+admin/operator of the tenant), so a direct write can store a non-canonical
+NIT/NRC or an invalid email and skips the conflict check. Options: CHECK
+constraints (`tax_id is null or tax_id = normalize_tax_id(tax_id)`, `NOT
+VALID` for legacy rows), or revoke direct insert/update now that
+`save_customers()` / `quick_add_customer()` exist.
+
+**Why:** Not reachable from the app today (every write goes through the
+RPCs); defense in depth. Same for `products`.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Checking ECTEC's existing customer data in prod first.
+
 ### ~~Dedicated product catalog page (candidate slice 6)~~ — DONE
 
 **Done 2026-10-28:** `/products` — spreadsheet-style grid (paste columns from

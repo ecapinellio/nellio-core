@@ -3,6 +3,8 @@ import {
 	blocksSave,
 	fillFromPaste,
 	isHeaderLine,
+	parseTsv,
+	rebaseChangedFields,
 	matchesSearch,
 	findDuplicates,
 	isProblemIssue,
@@ -43,6 +45,31 @@ describe("generic grid core", () =>
 		expect(result.extraColumns).toBe(1);
 	});
 
+	it("parses Excel's quoted cells instead of splitting them into rows", () =>
+	{
+		// An address with Alt+Enter and a name with a quote, as Excel copies them.
+		const text = 'Ana\t"Col. Escalón\nSan Salvador"\n"Ferretería ""El Clavo"""\t7777-8888\n';
+		expect(parseTsv(text)).toEqual([["Ana", "Col. Escalón, San Salvador"], ["Ferretería \"El Clavo\"", "7777-8888"]]);
+		const result = fillFromPaste(contactModel, [contactModel.emptyRow("a")], 0, "name", text, newKey)!;
+		expect(result.filled).toBe(2);
+		expect(result.rows.map((r) => r.name)).toEqual(["Ana", "Ferretería \"El Clavo\""]);
+		// A lone quoted cell is unquoted too; a plain one is left to the input.
+		expect(fillFromPaste(contactModel, [contactModel.emptyRow("a")], 0, "name", '"Ana\nLópez"', newKey)!.rows[0].name).toBe("Ana, López");
+		expect(fillFromPaste(contactModel, [contactModel.emptyRow("a")], 0, "name", " Ana ", newKey)).toBeNull();
+		// A stray leading quote that isn't Excel quoting stays literal.
+		expect(parseTsv('"pulgadas\tx')).toEqual([["\"pulgadas", "x"]]);
+	});
+
+	it("'Guardar el mío' keeps only my changed fields and takes theirs for the rest", () =>
+	{
+		const base = { ...saved("Ana"), phone: "1111", original: { name: "Ana", phone: "1111" } } as ContactRow;
+		const mine = { ...base, phone: "2222" };
+		const theirs = { ...base, name: "Ana López", updatedAt: "t2", original: { name: "Ana López", phone: "1111" } } as ContactRow;
+		const rebased = rebaseChangedFields(mine, theirs, ["name", "phone"]);
+		expect([rebased.name, rebased.phone, rebased.updatedAt]).toEqual(["Ana López", "2222", "t2"]);
+		expect(rebased.original).toBe(theirs.original);
+	});
+
 	it("skips a pasted header row, but never a real row", () =>
 	{
 		const labels = ["Nombre", "Teléfono", "Cliente"];
@@ -59,12 +86,14 @@ describe("generic grid core", () =>
 
 	it("searches by name, or by phone/NIT digits when the model provides them", () =>
 	{
-		const model = { ...contactModel, searchDigitsOf: (r: ContactRow) => r.phone };
+		const model = { ...contactModel, searchDigitsOf: (r: ContactRow) => [r.phone, r.name === "Ana López" ? "0614-0101" : ""] };
 		const ana = { ...saved("Ana López"), phone: "2222-3333" };
 		expect(matchesSearch(model, ana, "lopez")).toBe(true);
 		expect(matchesSearch(model, ana, "22223333")).toBe(true);
 		expect(matchesSearch(model, ana, "2222-33")).toBe(true);
 		expect(matchesSearch(model, ana, "999")).toBe(false);
+		// Never across fields: phone end + NIT start.
+		expect(matchesSearch(model, ana, "33330614")).toBe(false);
 		expect(matchesSearch(contactModel, ana, "2222")).toBe(false);
 	});
 

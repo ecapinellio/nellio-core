@@ -47,8 +47,28 @@ export interface GridModel<T extends BaseRow, C extends string>
 	nameOf: (row: T) => string;
 	/** Name as loaded; null for rows created in the grid. */
 	originalNameOf: (row: T) => string | null;
-	/** Other fields the search box matches by digits (phone, NIT); name only when absent. */
-	searchDigitsOf?: (row: T) => string;
+	/** Other fields the search box matches by digits (phone, NIT), each on its own; name only when absent. */
+	searchDigitsOf?: (row: T) => readonly string[];
+}
+
+/**
+ * "Guardar el mío" after a conflict: keep only the fields I actually
+ * changed and take everything else from the newer saved version — otherwise
+ * my stale copy silently overwrites what the other person edited (review:
+ * fiscal panel / active lost on rebase).
+ */
+export function rebaseChangedFields<T extends BaseRow & { original: object | null }>(mine: T, saved: T, fields: readonly (keyof T & string)[]): T
+{
+	const next: T = { ...mine, updatedAt: saved.updatedAt, original: saved.original };
+	const original = mine.original as Partial<Record<string, unknown>> | null;
+	for (const field of fields)
+	{
+		if (original !== null && mine[field] === original[field])
+		{
+			next[field] = saved[field];
+		}
+	}
+	return next;
 }
 
 /**
@@ -63,7 +83,8 @@ export function matchesSearch<T extends BaseRow, C extends string>(model: GridMo
 		return true;
 	}
 	const digits = search.replace(/\D/g, "");
-	return digits.length >= 4 && model.searchDigitsOf !== undefined && model.searchDigitsOf(row).replace(/\D/g, "").includes(digits);
+	return digits.length >= 4 && model.searchDigitsOf !== undefined
+		&& model.searchDigitsOf(row).some((field) => field.replace(/\D/g, "").includes(digits));
 }
 
 /**
@@ -92,6 +113,84 @@ export interface PasteResult<T, C>
 	/** The first line was the sheet's header row ("Nombre, Teléfono…") and was skipped. */
 	skippedHeader: boolean;
 	column: C;
+}
+
+/**
+ * Excel/Sheets clipboard text: tab-separated, one line per row, and a cell
+ * containing a line break (Alt+Enter), tab or quote comes wrapped in quotes
+ * with "" for a literal quote. Splitting on "\n" alone turned such a cell
+ * into a bogus extra row (review). Line breaks inside a cell become ", "
+ * since grid cells are single-line.
+ */
+export function parseTsv(text: string): string[][]
+{
+	const t = text.replace(/\r\n?/g, "\n");
+	const rows: string[][] = [];
+	let row: string[] = [];
+	let cell = "";
+	let cellStart = true;
+	let i = 0;
+	while (i < t.length)
+	{
+		const ch = t[i];
+		if (cellStart && ch === "\"")
+		{
+			let j = i + 1;
+			let value = "";
+			let closed = false;
+			while (j < t.length)
+			{
+				if (t[j] === "\"")
+				{
+					if (t[j + 1] === "\"")
+					{
+						value += "\"";
+						j += 2;
+						continue;
+					}
+					closed = true;
+					break;
+				}
+				value += t[j];
+				j++;
+			}
+			// Only a properly closed field followed by a separator is quoted;
+			// anything else is a literal leading quote.
+			if (closed && (j + 1 === t.length || t[j + 1] === "\t" || t[j + 1] === "\n"))
+			{
+				cell = value.replace(/\s*\n\s*/g, ", ");
+				cellStart = false;
+				i = j + 1;
+				continue;
+			}
+		}
+		cellStart = false;
+		if (ch === "\t")
+		{
+			row.push(cell);
+			cell = "";
+			cellStart = true;
+		}
+		else if (ch === "\n")
+		{
+			row.push(cell);
+			rows.push(row);
+			row = [];
+			cell = "";
+			cellStart = true;
+		}
+		else
+		{
+			cell += ch;
+		}
+		i++;
+	}
+	if (cell !== "" || row.length > 0 || !cellStart)
+	{
+		row.push(cell);
+		rows.push(row);
+	}
+	return rows;
 }
 
 /**
@@ -124,16 +223,18 @@ export function fillFromPaste<T extends BaseRow, C extends string>(
 	headerLabels: readonly string[] = [],
 ): PasteResult<T, C> | null
 {
-	const lines = text.replace(/\r\n?/g, "\n").split("\n");
-	while (lines.length > 0 && lines[lines.length - 1].trim() === "")
+	const lines = parseTsv(text);
+	while (lines.length > 0 && lines[lines.length - 1].every((cell) => cell.trim() === ""))
 	{
 		lines.pop();
 	}
-	if (lines.length === 0 || (lines.length === 1 && !lines[0].includes("\t")))
+	// One plain cell is a normal paste — let the input handle it. (A quoted
+	// one, "Col. Escalón↵San Salvador", still needs unquoting here.)
+	if (lines.length === 0 || (lines.length === 1 && lines[0].length === 1 && !text.trimStart().startsWith("\"")))
 	{
 		return null;
 	}
-	const skippedHeader = isHeaderLine(lines[0], headerLabels);
+	const skippedHeader = isHeaderLine(lines[0].join("\t"), headerLabels);
 	if (skippedHeader)
 	{
 		lines.shift();
@@ -150,7 +251,7 @@ export function fillFromPaste<T extends BaseRow, C extends string>(
 		{
 			next.push(model.emptyRow(newKey()));
 		}
-		const cells = line.split("\t");
+		const cells = line;
 		extraColumns = Math.max(extraColumns, startCol + cells.length - model.columns.length);
 
 		let row = { ...next[target] };

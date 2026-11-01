@@ -15,6 +15,7 @@ import {
 	type GridColumn,
 	type GridRow,
 } from "@/lib/products/grid";
+import { rebaseChangedFields } from "@/lib/grid/core";
 import { PRODUCT_UNITS, UNIT_LABELS, isProductUnit, type ProductUnit } from "@/lib/products/units";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "@/components/status-badge";
@@ -49,7 +50,7 @@ interface UnitPrompt
 }
 
 const fromConflict = (c: SaveConflict) => rowFromProduct(c);
-const rebaseOnto = (mine: GridRow, saved: GridRow): GridRow => ({ ...mine, updatedAt: saved.updatedAt, original: saved.original });
+const rebaseOnto = (mine: GridRow, saved: GridRow): GridRow => rebaseChangedFields(mine, saved, ["name", "price", "unit", "active"]);
 const noContext = () => undefined;
 const issuesOf = (row: GridRow) => rowIssues(row);
 const isNoPrice = (row: GridRow) => row.original !== null && row.original.price === "";

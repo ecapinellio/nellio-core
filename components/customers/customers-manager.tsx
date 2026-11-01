@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { AlertTriangle, Plus } from "lucide-react";
 import { saveCustomers } from "@/app/(app)/customers/actions";
 import type { CustomerConflict } from "@/lib/customers/catalog";
-import { normalizeName } from "@/lib/grid/core";
+import { normalizeName, rebaseChangedFields } from "@/lib/grid/core";
 import { normalizeTaxId } from "@/lib/customers/parse";
 import {
 	buildCustomerContext,
@@ -14,6 +14,7 @@ import {
 	isBlankCustomer,
 	isNameOnly,
 	rowFromCustomer,
+	TEXT_FIELDS,
 	toCustomerPayload,
 	type CustomerColumn,
 	type CustomerContext,
@@ -38,7 +39,8 @@ const HEADER_ALIASES = ["Cliente", "Clientes", "Razón social", "Tel", "Tel.", "
 const LEAVE_WARNING = "Tienes cambios sin guardar en clientes. Si sales, se pierden. ¿Salir de todas formas?";
 
 const fromConflict = (c: CustomerConflict) => rowFromCustomer(c);
-const rebaseOnto = (mine: CustomerRow, saved: CustomerRow): CustomerRow => ({ ...mine, updatedAt: saved.updatedAt, original: saved.original });
+const REBASE_FIELDS = [...TEXT_FIELDS, "active"] as const;
+const rebaseOnto = (mine: CustomerRow, saved: CustomerRow): CustomerRow => rebaseChangedFields(mine, saved, REBASE_FIELDS);
 
 // The NIT index only changes when some NIT does — returning the same object
 // otherwise keeps the memoized rows from all re-rendering on each keystroke.
@@ -46,7 +48,8 @@ let lastSignature = "";
 let lastContext: CustomerContext = { byTaxId: new Map() };
 function contextFor(rows: CustomerRow[]): CustomerContext
 {
-	const signature = rows.map((r) => `${r.key}\u0000${r.tax_id}\u0000${r.name}`).join("\u0001");
+	// Only rows with a NIT are in the index (and only their key/name/NIT are read).
+	const signature = rows.filter((r) => r.tax_id.trim() !== "").map((r) => `${r.key}\u0000${r.tax_id}\u0000${r.name}`).join("\u0001");
 	if (signature !== lastSignature)
 	{
 		lastSignature = signature;
@@ -114,7 +117,7 @@ export function CustomersManager({ customers }: { customers: CustomerRecord[] })
 			}
 		},
 	});
-	const { rows, visible, saving, saveError, attempted, dirty, ctx, latest, updateRow, requestPaste } = grid;
+	const { rows, setRows, visible, saving, saveError, attempted, dirty, ctx, latest, updateRow, requestPaste } = grid;
 
 	// A new name matching a deactivated customer says so and offers to
 	// reactivate it instead (design D7).
@@ -149,12 +152,17 @@ export function CustomersManager({ customers }: { customers: CustomerRecord[] })
 			{
 				return;
 			}
+			// Whatever was typed in the new row (phone, NIT…) moves to the
+			// reactivated one instead of being dropped with the row.
+			const typed = Object.fromEntries(TEXT_FIELDS.filter((f) => f !== "name" && dup[f].trim() !== "").map((f) => [f, dup[f]]));
 			const norm = normalizeName(dup.name);
-			grid.setRows(all
+			setRows(all
 				.filter((r) => r.key !== key)
-				.map((r) => (r.original !== null && !r.original.active && normalizeName(r.name) === norm ? { ...r, active: true } : r)));
+				.map((r) => (r.original !== null && !r.original.active && normalizeName(r.name) === norm
+					? { ...r, ...typed, taxIdPadded: dup.taxIdPadded && "tax_id" in typed, active: true }
+					: r)));
 		},
-	}), [updateRow, requestPaste, latest, grid]);
+	}), [updateRow, requestPaste, latest, setRows]);
 
 	const fiscalRow = fiscalKey ? rows.find((r) => r.key === fiscalKey) ?? null : null;
 

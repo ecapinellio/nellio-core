@@ -13,7 +13,9 @@ export function normalizeTaxId(text: string): { value: string; padded: boolean }
 {
 	let digits = text.replace(/\D/g, "");
 	let padded = false;
-	if (digits.length === 13 || digits.length === 8)
+	// 8 digits is also a phone pasted into the wrong column — only pad a
+	// real DUI (its check digit must match), or "2222-3333" became a DUI.
+	if (digits.length === 13 || (digits.length === 8 && isValidDui(`0${digits}`)))
 	{
 		digits = `0${digits}`;
 		padded = true;
@@ -27,6 +29,21 @@ export function normalizeTaxId(text: string): { value: string; padded: boolean }
 		return { value: `${digits.slice(0, 8)}-${digits.slice(8)}`, padded };
 	}
 	return null;
+}
+
+/** DUI check digit: the first 8 digits weighted 9…2, (10 − sum mod 10) mod 10. */
+export function isValidDui(nineDigits: string): boolean
+{
+	if (!/^[0-9]{9}$/.test(nineDigits))
+	{
+		return false;
+	}
+	let sum = 0;
+	for (let i = 0; i < 8; i++)
+	{
+		sum += Number(nineDigits[i]) * (9 - i);
+	}
+	return (10 - (sum % 10)) % 10 === Number(nineDigits[8]);
 }
 
 /** NRC: 2-8 digits, the last a check digit → "123456-7". */

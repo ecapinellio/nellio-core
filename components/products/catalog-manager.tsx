@@ -1,17 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Loader2, Plus, Search } from "lucide-react";
+import { useMemo, useState } from "react";
+import { AlertTriangle, Plus } from "lucide-react";
 import { saveProducts } from "@/app/(app)/products/actions";
 import type { SaveConflict } from "@/lib/products/catalog";
 import {
 	emptyRow,
-	fillFromPaste,
-	findDuplicates,
-	hasProblems,
 	isBlank,
-	isDirty,
-	normalizeProductName,
+	productGridModel,
 	rowFromProduct,
 	rowIssues,
 	toSavePayload,
@@ -20,7 +16,6 @@ import {
 	type GridRow,
 } from "@/lib/products/grid";
 import { UNIT_LABELS, isProductUnit, type ProductUnit } from "@/lib/products/units";
-import { useLeaveGuard } from "@/hooks/use-leave-guard";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
@@ -33,28 +28,16 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import { useEditableGrid } from "@/components/grid/use-editable-grid";
+import { EmptyFilter, GridToastView, GridToolbar, PasteRenameDialog, SaveBar } from "@/components/grid/grid-chrome";
+import { ConflictDialog } from "@/components/grid/conflict-dialog";
 import { CatalogRow, type RowHandlers } from "@/components/products/catalog-row";
 import { PasteGuide } from "@/components/products/paste-guide";
-import { ConflictDialog, type ConflictChoice } from "@/components/products/conflict-dialog";
 import { ProductEditSheet } from "@/components/products/product-edit-sheet";
 
-const LEAVE_WARNING = "Tienes cambios sin guardar en el catálogo. Si sales, se pierden. ¿Salir de todas formas?";
+const NOUNS = { one: "producto", many: "productos" };
 const COLUMN_LABELS: Record<GridColumn, string> = { name: "Nombre", price: "Precio", unit: "Unidad" };
-
-interface Toast
-{
-	id: number;
-	text: string;
-	showProblems?: boolean;
-}
-
-interface PastePrompt
-{
-	key: string;
-	column: GridColumn;
-	text: string;
-	renamed: number;
-}
+const LEAVE_WARNING = "Tienes cambios sin guardar en el catálogo. Si sales, se pierden. ¿Salir de todas formas?";
 
 interface UnitPrompt
 {
@@ -64,209 +47,75 @@ interface UnitPrompt
 	count: number;
 }
 
-function initialRows(products: CatalogProduct[]): GridRow[]
+const fromConflict = (c: SaveConflict) => rowFromProduct(c);
+const rebaseOnto = (mine: GridRow, saved: GridRow): GridRow => ({ ...mine, updatedAt: saved.updatedAt, original: saved.original });
+const noContext = () => undefined;
+const issuesOf = (row: GridRow) => rowIssues(row);
+const isNoPrice = (row: GridRow) => row.original !== null && row.original.price === "";
+
+function pasteSummary(touched: GridRow[])
 {
-	return [...products.map(rowFromProduct), emptyRow("new-0")];
+	const nPrice = touched.filter((r) => rowIssues(r).price?.kind === "error").length;
+	const nUnit = touched.filter((r) => r.unitRaw).length;
+	const parts: string[] = [];
+	if (nPrice) parts.push(nPrice === 1 ? "1 precio por revisar" : `${nPrice} precios por revisar`);
+	if (nUnit) parts.push(nUnit === 1 ? "1 unidad no reconocida" : `${nUnit} unidades no reconocidas`);
+	return { parts, attention: nPrice + nUnit };
 }
 
-/** The grid always ends in one blank row to type or paste into. */
-function withTrailingRow(rows: GridRow[], newKey: () => string): GridRow[]
+function describe(name: string, price: string, unit: string | null, active: boolean): string
 {
-	const last = rows[rows.length - 1];
-	return last && isBlank(last) ? rows : [...rows, emptyRow(newKey())];
+	const unitLabel = unit && isProductUnit(unit) ? UNIT_LABELS[unit] : "sin unidad";
+	const priceText = price ? `$${price}` : "sin precio";
+	return `${name} · ${priceText} · ${unitLabel}${active ? "" : " · desactivado"}`;
 }
 
 /**
- * /products — the catalog grid (eng + design review, 2026-10-27).
- *
- *   rows[] (whole catalog + new rows) ──filters──▶ visible rows ──▶ CatalogRow (memo)
- *        │                                                  ▲
- *        │ paste / typing / unit pick / active toggle ──────┘
- *        ▼
- *   sticky bar ── Guardar ──▶ saveProducts() ──▶ saved → toast, server re-render resets rows
- *                                         └──▶ conflicts → ConflictDialog → resolve → save again
+ * /products — the catalog grid (eng + design review, 2026-10-27). State and
+ * the shared grid chrome live in components/grid/; this adds what's
+ * product-specific: price/unit cells, the unknown-unit prompt, the empty
+ * catalog guide and the phone list.
  */
 export function CatalogManager({ products }: { products: CatalogProduct[] })
 {
-	const keyCounter = useRef(1);
-	const newKey = useCallback(() => `new-${keyCounter.current++}`, []);
-
-	const [rows, setRows] = useState(() => initialRows(products));
-	const [search, setSearch] = useState("");
-	const [onlyNoPrice, setOnlyNoPrice] = useState(false);
-	const [showInactive, setShowInactive] = useState(false);
-	// Rows that had problems when the filter was turned on — a snapshot, so a
-	// row being fixed doesn't vanish (and drop focus) mid-typing.
-	const [problemFilter, setProblemFilter] = useState<Set<string> | null>(null);
-	const onlyProblems = problemFilter !== null;
-	const [attempted, setAttempted] = useState(false);
-	const [saving, setSaving] = useState(false);
-	const [saveError, setSaveError] = useState<string | null>(null);
-	const [toast, setToast] = useState<Toast | null>(null);
-	const [conflicts, setConflicts] = useState<SaveConflict[] | null>(null);
-	const [choices, setChoices] = useState<Record<string, ConflictChoice>>({});
 	const [guideOpen, setGuideOpen] = useState(products.length === 0);
 	const [unitPrompt, setUnitPrompt] = useState<UnitPrompt | null>(null);
-	const [pastePrompt, setPastePrompt] = useState<PastePrompt | null>(null);
 	const [editing, setEditing] = useState<GridRow | null>(null);
 
-	// Fresh rows whenever the server sends a new catalog (after a save's
-	// revalidatePath) — adjusted during render, not in an effect.
-	const [shownFor, setShownFor] = useState(products);
-	if (products !== shownFor)
-	{
-		setShownFor(products);
-		setRows(initialRows(products));
-		setAttempted(false);
-		setSaving(false);
-		setEditing(null);
-		// The guide is for an empty catalog; once something is saved it's opt-in.
-		if (products.length > 0)
+	const grid = useEditableGrid({
+		model: productGridModel,
+		records: products,
+		fromRecord: rowFromProduct,
+		fromConflict,
+		rebaseOnto,
+		buildContext: noContext,
+		issuesOf,
+		nameColumn: "name",
+		columnLabels: COLUMN_LABELS,
+		pasteSummary,
+		incomplete: isNoPrice,
+		toPayload: toSavePayload,
+		save: saveProducts,
+		nouns: NOUNS,
+		leaveWarning: LEAVE_WARNING,
+		onReset: (next) =>
 		{
-			setGuideOpen(false);
-		}
-	}
-
-	const duplicates = useMemo(() => findDuplicates(rows), [rows]);
-	const dirty = useMemo(() => rows.filter(isDirty), [rows]);
-	const problemRows = useMemo(
-		() => rows.filter((r) => duplicates.has(r.key) || Object.values(rowIssues(r)).some((i) => i?.kind === "error" || (attempted && i))),
-		[rows, duplicates, attempted],
-	);
+			setEditing(null);
+			// The guide is for an empty catalog; once something is saved it's opt-in.
+			if (next.length > 0)
+			{
+				setGuideOpen(false);
+			}
+		},
+	});
+	const { visible, saving, saveError, attempted, duplicates, dirty, latest, updateRow, requestPaste } = grid;
 
 	const savedCount = products.filter((p) => p.active).length;
 	const noPriceCount = products.filter((p) => p.price_per_unit === null).length;
-	const newCount = dirty.filter((r) => r.id === null).length;
-	const editedCount = dirty.length - newCount;
-
-	const visible = useMemo(() =>
-	{
-		const needle = normalizeProductName(search);
-		return rows.filter((r) =>
-		{
-			if (isBlank(r))
-			{
-				return !onlyProblems && !onlyNoPrice && needle === "";
-			}
-			if (problemFilter)
-			{
-				return problemFilter.has(r.key);
-			}
-			if (needle && !normalizeProductName(r.name).includes(needle))
-			{
-				return false;
-			}
-			if (onlyNoPrice && !(r.original !== null && r.original.price === ""))
-			{
-				return false;
-			}
-			// A row deactivated in this session stays visible until saved.
-			return r.active || showInactive || isDirty(r);
-		});
-	}, [rows, search, onlyNoPrice, showInactive, onlyProblems, problemFilter]);
-
-	useLeaveGuard(dirty.length > 0, LEAVE_WARNING);
-
-	// Handlers read the latest state through a ref so they stay stable and
-	// memoized rows don't re-render on every keystroke elsewhere (D9).
-	const filtering = search !== "" || onlyNoPrice || onlyProblems;
-	const latest = useRef({ rows, visible, filtering });
-	useEffect(() =>
-	{
-		latest.current = { rows, visible, filtering };
-	});
-
-	const showToast = useCallback((text: string, showProblems = false) =>
-	{
-		setToast({ id: Date.now(), text, showProblems });
-	}, []);
-
-	useEffect(() =>
-	{
-		if (!toast)
-		{
-			return;
-		}
-		const timer = setTimeout(() => setToast(null), toast.showProblems ? 6000 : 4000);
-		return () => clearTimeout(timer);
-	}, [toast]);
-
-	/**
-	 * Fills rows from a paste and shows the summary toast (design D8 / 5A).
-	 * key = row pasted into, or null for "add as new rows" (starts at the
-	 * trailing blank row, ignoring filters).
-	 */
-	const applyPaste = useCallback((key: string | null, column: GridColumn, text: string): boolean =>
-	{
-		const { rows: all, visible, filtering } = latest.current;
-		const shown = key === null ? all : visible;
-		const start = key === null ? all.findIndex(isBlank) : shown.findIndex((r) => r.key === key);
-		// Fill down the rows the user SEES (filters may hide some).
-		const result = fillFromPaste(shown, start, column, text, newKey);
-		if (!result)
-		{
-			return false;
-		}
-		const updated = new Map(result.rows.map((r) => [r.key, r]));
-		const known = new Set(all.map((r) => r.key));
-		const merged = all.map((r) => updated.get(r.key) ?? r).filter((r) => !(isBlank(r) && !updated.has(r.key)));
-		// Under a search/filter, new rows would be created hidden (no name
-		// yet, so the filter drops them) and then block saving unseen —
-		// so a filtered paste only fills the rows on screen.
-		const filtered = key !== null && filtering;
-		const created = result.rows.filter((r) => !known.has(r.key));
-		const added = filtered ? [] : created;
-		const dropped = filtered ? created.length : 0;
-		const next = withTrailingRow([...merged, ...added], newKey);
-		setRows(next);
-
-		const touched = result.rows.slice(start, start + result.filled - dropped);
-		const dupes = findDuplicates(next);
-		const nDup = touched.filter((r) => dupes.has(r.key)).length;
-		const nPrice = touched.filter((r) => rowIssues(r).price?.kind === "error").length;
-		const nUnit = touched.filter((r) => r.unitRaw).length;
-		const parts = [`Pegaste ${plural(result.filled - dropped, "fila", "filas")} en ${COLUMN_LABELS[column]}`];
-		if (dropped) parts.push(`${plural(dropped, "fila no entró", "filas no entraron")} (quita el filtro para agregar filas nuevas)`);
-		if (nDup) parts.push(plural(nDup, "repetido", "repetidos"));
-		if (nPrice) parts.push(plural(nPrice, "precio por revisar", "precios por revisar"));
-		if (nUnit) parts.push(plural(nUnit, "unidad no reconocida", "unidades no reconocidas"));
-		if (result.extraColumns) parts.push(result.extraColumns === 1 ? "se ignoró 1 columna extra" : `se ignoraron ${result.extraColumns} columnas extra`);
-		showToast(parts.join(" · "), nDup + nPrice + nUnit > 0);
-		return true;
-	}, [newKey, showToast]);
 
 	const handlers = useMemo<RowHandlers>(() => ({
-		onChange: (key, patch) =>
-		{
-			setRows((prev) => withTrailingRow(prev.map((r) => (r.key === key ? { ...r, ...patch } : r)), newKey));
-		},
-		onPaste: (key, column, text) =>
-		{
-			// Pasted names landing on saved products would rename them, and old
-			// orders show the product's current name — so ask first (/review).
-			if (column === "name")
-			{
-				const shown = latest.current.visible;
-				const start = shown.findIndex((r) => r.key === key);
-				let probe = 0;
-				const preview = fillFromPaste(shown, start, column, text, () => `probe-${probe++}`);
-				if (!preview)
-				{
-					return false;
-				}
-				const renamed = preview.rows.slice(start, start + preview.filled).filter((r, i) =>
-				{
-					const before = shown[start + i];
-					return before !== undefined && before.original !== null && before.name !== r.name;
-				}).length;
-				if (renamed > 0)
-				{
-					setPastePrompt({ key, column, text, renamed });
-					return true;
-				}
-			}
-			return applyPaste(key, column, text);
-		},
+		onChange: (key, patch) => updateRow(key, (r) => ({ ...r, ...patch })),
+		onPaste: requestPaste,
 		onUnitPick: (key, unit) =>
 		{
 			const row = latest.current.rows.find((r) => r.key === key);
@@ -280,13 +129,10 @@ export function CatalogManager({ products }: { products: CatalogProduct[] })
 					return;
 				}
 			}
-			setRows((prev) => withTrailingRow(prev.map((r) => (r.key === key ? { ...r, unit, unitRaw: null } : r)), newKey));
+			updateRow(key, (r) => ({ ...r, unit, unitRaw: null }));
 		},
-		onToggleActive: (key) =>
-		{
-			setRows((prev) => prev.map((r) => (r.key === key ? { ...r, active: !r.active } : r)));
-		},
-	}), [newKey, applyPaste]);
+		onToggleActive: (key) => updateRow(key, (r) => ({ ...r, active: !r.active })),
+	}), [updateRow, requestPaste, latest]);
 
 	function applyUnitPrompt(all: boolean)
 	{
@@ -295,106 +141,10 @@ export function CatalogManager({ products }: { products: CatalogProduct[] })
 			return;
 		}
 		const raw = unitPrompt.raw.toLowerCase();
-		setRows((prev) => prev.map((r) =>
+		grid.setRows((prev) => prev.map((r) =>
 			r.key === unitPrompt.key || (all && r.unitRaw?.toLowerCase() === raw) ? { ...r, unit: unitPrompt.unit, unitRaw: null } : r));
 		setUnitPrompt(null);
 	}
-
-	const save = useCallback(async (source: GridRow[]) =>
-	{
-		setAttempted(true);
-		setSaveError(null);
-		const dupes = findDuplicates(source);
-		const blocked = source.filter((r) => !isBlank(r) && isDirty(r) && hasProblems(r, dupes));
-		if (blocked.length > 0)
-		{
-			setProblemFilter(new Set(blocked.map((r) => r.key)));
-			requestAnimationFrame(() => document.querySelector<HTMLElement>("[aria-invalid='true']")?.focus());
-			return;
-		}
-
-		const payload = toSavePayload(source);
-		if (payload.length === 0)
-		{
-			return;
-		}
-
-		setSaving(true);
-		try
-		{
-			const result = await saveProducts(payload);
-			if (result.status === "saved")
-			{
-				showToast(result.saved === 1 ? "1 producto guardado" : `${result.saved} productos guardados`);
-				setProblemFilter(null);
-				// saving stays true until the revalidated catalog arrives and resets the grid.
-				return;
-			}
-			setSaving(false);
-			if (result.status === "conflicts")
-			{
-				setChoices({});
-				setConflicts(result.conflicts);
-				return;
-			}
-			setSaveError(result.error);
-		}
-		catch
-		{
-			setSaving(false);
-			setSaveError("No se pudo guardar. Revisa tu conexión e intenta de nuevo.");
-		}
-	}, [showToast]);
-
-	function resolveConflicts(next: Record<string, ConflictChoice>)
-	{
-		setChoices(next);
-		if (!conflicts || conflicts.some((c) => !next[c.id]))
-		{
-			return;
-		}
-		const byId = new Map(conflicts.map((c) => [c.id, c]));
-		const resolved = latest.current.rows.map((r) =>
-		{
-			const c = r.id ? byId.get(r.id) : undefined;
-			if (!c)
-			{
-				return r;
-			}
-			const theirs = rowFromProduct({ ...c, price_per_unit: c.price_per_unit });
-			// "theirs": take the saved version as-is (row becomes clean).
-			// "mine": keep my values, but against the new updated_at so the re-save wins.
-			return next[c.id] === "theirs" ? { ...theirs, key: r.key } : { ...r, updatedAt: c.updated_at, original: theirs.original };
-		});
-		setRows(resolved);
-		setConflicts(null);
-		void save(resolved);
-	}
-
-	function discard()
-	{
-		if (window.confirm(`¿Descartar ${dirty.length === 1 ? "1 cambio" : `${dirty.length} cambios`}?`))
-		{
-			setRows(initialRows(products));
-			setAttempted(false);
-			setProblemFilter(null);
-			setSaveError(null);
-		}
-	}
-
-	function saveFromSheet(row: GridRow)
-	{
-		const exists = rows.some((r) => r.key === row.key);
-		const next = withTrailingRow(exists ? rows.map((r) => (r.key === row.key ? row : r)) : [...rows.filter((r) => !isBlank(r)), row], newKey);
-		setRows(next);
-		void save(next);
-	}
-
-	const sheetDuplicate = useCallback((name: string, key: string) =>
-	{
-		const norm = normalizeProductName(name);
-		return norm && rows.some((r) => r.key !== key && !isBlank(r) && normalizeProductName(r.name) === norm) ? "Ya existe" : undefined;
-	}, [rows]);
 
 	return (
 		<div className="flex flex-col gap-5">
@@ -410,7 +160,7 @@ export function CatalogManager({ products }: { products: CatalogProduct[] })
 					{!guideOpen
 						? <Button type="button" variant="link" size="sm" className="hidden md:inline-flex" onClick={() => setGuideOpen(true)}>¿Cómo pegar desde Excel?</Button>
 						: null}
-					<Button type="button" className="h-11 md:hidden" onClick={() => setEditing(emptyRow(newKey()))}>
+					<Button type="button" className="h-11 md:hidden" onClick={() => setEditing(emptyRow(grid.newKey()))}>
 						<Plus />
 						Agregar producto
 					</Button>
@@ -423,44 +173,20 @@ export function CatalogManager({ products }: { products: CatalogProduct[] })
 				Para cargar varios productos desde Excel, usa una computadora.
 			</p>
 
-			<div className="flex flex-wrap items-center gap-2">
-				<div className="relative w-full sm:w-72">
-					<Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-					<input
-						type="search"
-						value={search}
-						onChange={(e) => setSearch(e.target.value)}
-						placeholder="Buscar producto…"
-						aria-label="Buscar producto"
-						className="h-11 w-full rounded-md border border-input bg-transparent pr-3 pl-8 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:h-9"
-					/>
-				</div>
-				{noPriceCount > 0
-					? (
-						<Button
-							type="button"
-							variant={onlyNoPrice ? "default" : "outline"}
-							size="sm"
-							aria-pressed={onlyNoPrice}
-							onClick={() => setOnlyNoPrice((v) => !v)}
-							className="h-11 md:h-8"
-						>
-							Sin precio · <span className="font-mono tabular-nums">{noPriceCount}</span>
-						</Button>
-					)
-					: null}
-				<label className="flex h-11 items-center gap-2 px-1 text-sm md:h-8">
-					<input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} className="size-4 accent-primary" />
-					Mostrar desactivados
-				</label>
-				{onlyProblems
-					? <Button type="button" variant="ghost" size="sm" onClick={() => setProblemFilter(null)} className="h-11 md:h-8">Ver todos</Button>
-					: null}
-			</div>
+			<GridToolbar
+				search={grid.search}
+				onSearch={grid.setSearch}
+				searchLabel="Buscar producto"
+				incomplete={{ label: "Sin precio", count: noPriceCount, on: grid.onlyIncomplete, toggle: () => grid.setOnlyIncomplete((v) => !v) }}
+				showInactive={grid.showInactive}
+				onShowInactive={grid.setShowInactive}
+				onlyProblems={grid.onlyProblems}
+				onShowAll={() => grid.setProblemFilter(null)}
+			/>
 
-			{/* Desktop / tablet: the editable grid. */}
-			{/* Read-only while saving (design D7): edits made mid-save would be
-			    wiped when the saved catalog comes back. */}
+			{/* Desktop / tablet: the editable grid. Read-only while saving
+			    (design D7): edits made mid-save would be wiped when the saved
+			    catalog comes back. */}
 			<fieldset disabled={saving} aria-busy={saving} className="m-0 hidden min-w-0 border-0 p-0 md:block">
 				<table className="w-full border-collapse">
 					<thead>
@@ -485,8 +211,8 @@ export function CatalogManager({ products }: { products: CatalogProduct[] })
 						))}
 					</tbody>
 				</table>
-				{filtering && visible.length === 0
-					? <EmptyFilter search={search} onClear={() => { setSearch(""); setOnlyNoPrice(false); setProblemFilter(null); }} />
+				{grid.filtering && visible.length === 0
+					? <EmptyFilter search={grid.search} noun="producto" onClear={grid.clearFilters} />
 					: null}
 			</fieldset>
 
@@ -511,44 +237,23 @@ export function CatalogManager({ products }: { products: CatalogProduct[] })
 					</li>
 				))}
 				{visible.every(isBlank)
-					? <li className="px-3 py-6 text-center text-sm text-muted-foreground">{filtering ? "Ningún producto coincide." : "Todavía no hay productos."}</li>
+					? <li className="px-3 py-6 text-center text-sm text-muted-foreground">{grid.filtering ? "Ningún producto coincide." : "Todavía no hay productos."}</li>
 					: null}
 			</ul>
 
-			{/* Sticky save bar — only while there are changes (design D4 / 1A). */}
 			{dirty.length > 0
 				? (
-					<div className="sticky bottom-0 z-10 -mx-4 hidden border-t border-border bg-background px-4 py-3 shadow-sm md:-mx-6 md:block md:px-6">
-						{saveError
-							? (
-								<Alert variant="destructive" className="mb-2">
-									<AlertTriangle />
-									<AlertDescription>{saveError}</AlertDescription>
-								</Alert>
-							)
-							: null}
-						<div className="flex flex-wrap items-center justify-between gap-3">
-							<p className="text-sm">
-								{[newCount ? `${newCount} ${newCount === 1 ? "nuevo" : "nuevos"}` : null, editedCount ? `${editedCount} ${editedCount === 1 ? "editado" : "editados"}` : null].filter(Boolean).join(" · ")}
-								{problemRows.length > 0
-									? (
-										<>
-											{" · "}
-											<button type="button" onClick={() => setProblemFilter(new Set(problemRows.map((r) => r.key)))} className="font-medium text-destructive underline-offset-4 hover:underline">
-												{problemRows.length === 1 ? "1 con problemas" : `${problemRows.length} con problemas`}
-											</button>
-										</>
-									)
-									: null}
-							</p>
-							<div className="flex gap-2">
-								<Button type="button" variant="ghost" onClick={discard} disabled={saving}>Descartar</Button>
-								<Button type="button" onClick={() => void save(rows)} disabled={saving}>
-									{saving ? <><Loader2 className="animate-spin" />Guardando…</> : `Guardar ${dirty.length}`}
-								</Button>
-							</div>
-						</div>
-					</div>
+					<SaveBar
+						newCount={grid.newCount}
+						editedCount={dirty.length - grid.newCount}
+						problemCount={grid.problemRows.length}
+						saving={saving}
+						saveError={saveError}
+						saveCount={dirty.length}
+						onShowProblems={grid.showProblemRows}
+						onDiscard={grid.discard}
+						onSave={() => void grid.save(grid.rows)}
+					/>
 				)
 				: null}
 
@@ -561,48 +266,30 @@ export function CatalogManager({ products }: { products: CatalogProduct[] })
 				)
 				: null}
 
-			<div role="status" aria-live="polite" className="pointer-events-none fixed right-4 bottom-24 z-20 flex justify-end md:bottom-20">
-				{toast
-					? (
-						<div key={toast.id} className="pointer-events-auto flex items-center gap-3 rounded-lg border border-border bg-popover px-4 py-2.5 text-sm shadow-md">
-							<span>{toast.text}</span>
-							{toast.showProblems
-								? <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => { setProblemFilter(new Set(problemRows.map((r) => r.key))); setToast(null); }}>Ver</Button>
-								: null}
-						</div>
-					)
-					: null}
-			</div>
+			<GridToastView toast={grid.toast} onShowProblems={() => { grid.showProblemRows(); grid.setToast(null); }} />
 
 			<ConflictDialog
-				conflicts={conflicts}
-				rows={rows}
-				choices={choices}
-				onChoose={(id, choice) => resolveConflicts({ ...choices, [id]: choice })}
-				onChooseAll={(choice) => resolveConflicts(Object.fromEntries((conflicts ?? []).map((c) => [c.id, choice])))}
-				onCancel={() => setConflicts(null)}
+				conflicts={grid.conflicts}
+				nouns={NOUNS}
+				describeTheirs={(c) => describe(c.name, c.price_per_unit?.toFixed(2) ?? "", c.unit, c.active)}
+				describeMine={(id) =>
+				{
+					const mine = grid.rows.find((r) => r.id === id);
+					return mine ? describe(mine.name, mine.price, mine.unit, mine.active) : null;
+				}}
+				choices={grid.choices}
+				onChoose={(id, choice) => grid.resolveConflicts({ ...grid.choices, [id]: choice })}
+				onChooseAll={(choice) => grid.resolveConflicts(Object.fromEntries((grid.conflicts ?? []).map((c) => [c.id, choice])))}
+				onCancel={() => grid.setConflicts(null)}
 			/>
 
-			<Dialog open={pastePrompt !== null} onOpenChange={(open) => { if (!open) setPastePrompt(null); }}>
-				<DialogContent className="sm:max-w-md">
-					<DialogHeader>
-						<DialogTitle>
-							¿Cambiar el nombre de {pastePrompt?.renamed === 1 ? "1 producto que ya existe" : `${pastePrompt?.renamed} productos que ya existen`}?
-						</DialogTitle>
-						<DialogDescription>
-							Pegaste sobre productos guardados. Los pedidos anteriores mostrarán el nombre nuevo.
-						</DialogDescription>
-					</DialogHeader>
-					<DialogFooter>
-						<Button type="button" variant="ghost" onClick={() => { if (pastePrompt) applyPaste(pastePrompt.key, pastePrompt.column, pastePrompt.text); setPastePrompt(null); }}>
-							Reemplazar nombres
-						</Button>
-						<Button type="button" onClick={() => { if (pastePrompt) applyPaste(null, pastePrompt.column, pastePrompt.text); setPastePrompt(null); }}>
-							Agregar como nuevos
-						</Button>
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
+			<PasteRenameDialog
+				prompt={grid.pastePrompt}
+				nouns={NOUNS}
+				onReplace={(p) => { grid.applyPaste(p.key, p.column, p.text); grid.setPastePrompt(null); }}
+				onAddNew={(p) => { grid.applyPaste(null, p.column, p.text); grid.setPastePrompt(null); }}
+				onCancel={() => grid.setPastePrompt(null)}
+			/>
 
 			<Dialog open={unitPrompt !== null} onOpenChange={(open) => { if (!open) setUnitPrompt(null); }}>
 				<DialogContent className="sm:max-w-md">
@@ -623,27 +310,12 @@ export function CatalogManager({ products }: { products: CatalogProduct[] })
 
 			<ProductEditSheet
 				row={editing}
-				duplicate={sheetDuplicate}
+				duplicate={grid.nameTaken}
 				saving={saving}
 				error={saveError}
-				onSave={saveFromSheet}
+				onSave={grid.saveRow}
 				onClose={() => setEditing(null)}
 			/>
-		</div>
-	);
-}
-
-function plural(n: number, one: string, many: string): string
-{
-	return `${n} ${n === 1 ? one : many}`;
-}
-
-function EmptyFilter({ search, onClear }: { search: string; onClear: () => void })
-{
-	return (
-		<div className="flex flex-col items-center gap-2 py-10 text-sm text-muted-foreground">
-			<p>{search ? `Ningún producto coincide con ‘${search}’.` : "Ningún producto coincide con el filtro."}</p>
-			<Button type="button" variant="outline" size="sm" onClick={onClear}>Limpiar búsqueda</Button>
 		</div>
 	);
 }

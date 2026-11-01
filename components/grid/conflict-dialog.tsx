@@ -1,8 +1,5 @@
 "use client";
 
-import type { SaveConflict } from "@/lib/products/catalog";
-import { UNIT_LABELS, isProductUnit } from "@/lib/products/units";
-import type { GridRow } from "@/lib/products/grid";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -15,21 +12,37 @@ import {
 
 export type ConflictChoice = "theirs" | "mine";
 
+/** What every save RPC returns for a row someone else saved meanwhile. */
+export interface GridConflict
+{
+	id: string;
+	name: string;
+	updated_at: string;
+	updated_by_name: string | null;
+}
+
 /**
- * Someone saved a product after this grid loaded it (eng review D5, design
- * D12): a blocking dialog, because nothing in the batch saves until every
- * conflict is decided. Shows who, when, what it is now, and what you typed.
+ * Someone saved a row after this grid loaded it (catalog eng review D5,
+ * design D12): a blocking dialog, because nothing in the batch saves until
+ * every conflict is decided. Shows who, when, what it is now, and what you
+ * typed — the entity says how to describe each side.
  */
-export function ConflictDialog({
+export function ConflictDialog<K extends GridConflict>({
 	conflicts,
-	rows,
+	nouns,
+	describeTheirs,
+	describeMine,
 	choices,
 	onChoose,
 	onChooseAll,
 	onCancel,
 }: {
-	conflicts: SaveConflict[] | null;
-	rows: GridRow[];
+	conflicts: K[] | null;
+	/** "producto" / "productos" — for the title. */
+	nouns: { one: string; many: string };
+	describeTheirs: (conflict: K) => string;
+	/** null when the row isn't in the grid anymore. */
+	describeMine: (id: string) => string | null;
 	choices: Record<string, ConflictChoice>;
 	onChoose: (id: string, choice: ConflictChoice) => void;
 	onChooseAll: (choice: ConflictChoice) => void;
@@ -43,7 +56,7 @@ export function ConflictDialog({
 			<DialogContent className="sm:max-w-lg">
 				<DialogHeader>
 					<DialogTitle>
-						{list.length === 1 ? "1 producto cambió mientras editabas" : `${list.length} productos cambiaron mientras editabas`}
+						{list.length === 1 ? `1 ${nouns.one} cambió mientras editabas` : `${list.length} ${nouns.many} cambiaron mientras editabas`}
 					</DialogTitle>
 					<DialogDescription>
 						No se guardó nada todavía. Elige qué versión queda en cada uno.
@@ -53,7 +66,7 @@ export function ConflictDialog({
 				<ul className="flex max-h-[50vh] flex-col gap-3 overflow-y-auto">
 					{list.map((c) =>
 					{
-						const mine = rows.find((r) => r.id === c.id);
+						const mine = describeMine(c.id);
 						const who = c.updated_by_name ?? "Otra persona";
 						const choice = choices[c.id];
 						return (
@@ -62,9 +75,9 @@ export function ConflictDialog({
 								<p className="text-xs text-muted-foreground">{who} · {formatWhen(c.updated_at)}</p>
 								<dl className="mt-2 grid grid-cols-[6rem_1fr] gap-x-2 gap-y-1 text-sm">
 									<dt className="text-muted-foreground">Ahora</dt>
-									<dd className="font-mono tabular-nums">{describe(c.name, c.price_per_unit?.toFixed(2) ?? "", c.unit, c.active)}</dd>
+									<dd className="font-mono tabular-nums">{describeTheirs(c)}</dd>
 									<dt className="text-muted-foreground">Tu cambio</dt>
-									<dd className="font-mono tabular-nums">{mine ? describe(mine.name, mine.price, mine.unit, mine.active) : "—"}</dd>
+									<dd className="font-mono tabular-nums">{mine ?? "—"}</dd>
 								</dl>
 								<div className="mt-2 flex flex-wrap gap-2">
 									<Button
@@ -105,13 +118,6 @@ export function ConflictDialog({
 			</DialogContent>
 		</Dialog>
 	);
-}
-
-function describe(name: string, price: string, unit: string | null, active: boolean): string
-{
-	const unitLabel = unit && isProductUnit(unit) ? UNIT_LABELS[unit] : "sin unidad";
-	const priceText = price ? `$${price}` : "sin precio";
-	return `${name} · ${priceText} · ${unitLabel}${active ? "" : " · desactivado"}`;
 }
 
 function firstName(name: string): string

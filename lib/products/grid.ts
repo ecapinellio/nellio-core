@@ -1,13 +1,10 @@
 /**
- * Pure logic behind the /products catalog grid (eng review D8: everything
- * that can be wrong lives here, unit-tested; the component only renders).
- *
- *   Excel ──paste──▶ fillFromPaste() ──▶ rows[] ──▶ rowIssues() + findDuplicates()
- *                                          │              │
- *                                          │        red / "falta" cells
- *                                          ▼
- *                                 toSavePayload() (dirty rows only) ──▶ save_products()
+ * The product catalog's rows on top of the generic grid (lib/grid/core.ts):
+ * the row shape, price/unit parsing and validation, and the save payload.
+ * The generic paste / duplicate / blank logic is the shared one — these
+ * exports keep their product-shaped signatures for the catalog and its tests.
  */
+import * as core from "@/lib/grid/core";
 import { MAX_PRICE, parsePrice, priceErrorMessage } from "@/lib/products/parse";
 import { isProductUnit, parseUnit, type ProductUnit } from "@/lib/products/units";
 
@@ -26,15 +23,10 @@ interface RowValues
 	active: boolean;
 }
 
-export interface GridRow extends RowValues
+export interface GridRow extends RowValues, core.BaseRow
 {
-	/** Stable React key — new rows have no id yet. */
-	key: string;
-	id: string | null;
 	/** Pasted unit text we couldn't map ("saco"), kept visible (design D13). */
 	unitRaw: string | null;
-	/** Exact text from Postgres — never round-tripped through a JS Date (µs). */
-	updatedAt: string | null;
 	/** Values as loaded; null for rows created in the grid. */
 	original: RowValues | null;
 }
@@ -81,32 +73,12 @@ export function isDirty(row: GridRow): boolean
 	return row.name !== o.name || row.price !== o.price || row.unit !== o.unit || row.active !== o.active || row.unitRaw !== null;
 }
 
-/**
- * Same spec as the SQL normalize_product_name(): lowercase, no accents, no
- * whitespace at all — "Cloro 5%" = "CLORO 5 %". JS \s already covers the
- * non-breaking space.
- */
-export function normalizeProductName(name: string): string
-{
-	return name.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/\s+/g, "");
-}
+/** Same spec as the SQL normalize_product_name() — see core.normalizeName. */
+export const normalizeProductName = core.normalizeName;
 
-export interface PasteResult
-{
-	rows: GridRow[];
-	/** Lines pasted (rows filled). */
-	filled: number;
-	/** Columns beyond "Unidad" that were dropped (design D7). */
-	extraColumns: number;
-	column: GridColumn;
-}
+export type PasteResult = core.PasteResult<GridRow, GridColumn>;
 
-/**
- * Excel puts tabs between columns and newlines between rows. A single value
- * on a single line returns null so the input's normal paste happens.
- * Multi-line → fills down from rowIndex, creating rows; multi-column →
- * fills right from column (D7).
- */
+/** Fills down / right from a paste (design D7). See core.fillFromPaste. */
 export function fillFromPaste(
 	rows: GridRow[],
 	rowIndex: number,
@@ -115,43 +87,7 @@ export function fillFromPaste(
 	newKey: () => string,
 ): PasteResult | null
 {
-	const lines = text.replace(/\r\n?/g, "\n").split("\n");
-	while (lines.length > 0 && lines[lines.length - 1].trim() === "")
-	{
-		lines.pop();
-	}
-	if (lines.length === 0 || (lines.length === 1 && !lines[0].includes("\t")))
-	{
-		return null;
-	}
-
-	const startCol = GRID_COLUMNS.indexOf(column);
-	const next = rows.slice();
-	let extraColumns = 0;
-
-	lines.forEach((line, i) =>
-	{
-		const target = rowIndex + i;
-		while (next.length <= target)
-		{
-			next.push(emptyRow(newKey()));
-		}
-		const cells = line.split("\t");
-		extraColumns = Math.max(extraColumns, startCol + cells.length - GRID_COLUMNS.length);
-
-		let row = { ...next[target] };
-		cells.forEach((cell, j) =>
-		{
-			const col = GRID_COLUMNS[startCol + j];
-			if (col)
-			{
-				row = applyPastedCell(row, col, cell);
-			}
-		});
-		next[target] = row;
-	});
-
-	return { rows: next, filled: lines.length, extraColumns: Math.max(0, extraColumns), column };
+	return core.fillFromPaste(productGridModel, rows, rowIndex, column, text, newKey);
 }
 
 /** Applies one pasted value to a cell (typing updates fields directly). */
@@ -176,7 +112,7 @@ export function applyPastedCell(row: GridRow, column: GridColumn, value: string)
 	}
 }
 
-export type CellIssue = { kind: "missing" } | { kind: "error"; message: string };
+export type CellIssue = core.CellIssue;
 export type RowIssues = Partial<Record<GridColumn, CellIssue>>;
 
 /**
@@ -223,39 +159,10 @@ export function rowIssues(row: GridRow): RowIssues
 	return issues;
 }
 
-/**
- * Keys of rows whose name collides with another row (the grid holds the
- * whole catalog, so this also covers "already exists"). Rows saved and
- * untouched are never flagged — the one the user added or renamed is.
- */
+/** Rows whose name collides with another (the catalog's "Ya existe" / "Repetido"). */
 export function findDuplicates(rows: GridRow[]): Map<string, string>
 {
-	const groups = new Map<string, GridRow[]>();
-	for (const row of rows)
-	{
-		if (isBlank(row) || row.name.trim() === "")
-		{
-			continue;
-		}
-		const norm = normalizeProductName(row.name);
-		groups.set(norm, [...(groups.get(norm) ?? []), row]);
-	}
-
-	const flagged = new Map<string, string>();
-	for (const group of groups.values())
-	{
-		if (group.length < 2)
-		{
-			continue;
-		}
-		const changed = group.filter((r) => r.original === null || r.name !== r.original.name);
-		const message = changed.length < group.length ? "Ya existe" : "Repetido";
-		for (const r of changed)
-		{
-			flagged.set(r.key, message);
-		}
-	}
-	return flagged;
+	return core.findDuplicates(productGridModel, rows);
 }
 
 export interface SaveRow
@@ -271,7 +178,7 @@ export interface SaveRow
 /** Problem = any red cell, or any "falta" cell (those turn red on save). */
 export function hasProblems(row: GridRow, duplicates: Map<string, string>): boolean
 {
-	return duplicates.has(row.key) || Object.keys(rowIssues(row)).length > 0;
+	return core.blocksSave(rowIssues(row), duplicates.has(row.key));
 }
 
 /**
@@ -329,3 +236,14 @@ export function toSavePayload(rows: GridRow[]): SaveRow[]
 		};
 	});
 }
+
+/** How the generic grid sees a product row. */
+export const productGridModel: core.GridModel<GridRow, GridColumn> = {
+	columns: GRID_COLUMNS,
+	emptyRow,
+	isBlank,
+	isDirty,
+	applyPasted: applyPastedCell,
+	nameOf: (row) => row.name,
+	originalNameOf: (row) => row.original?.name ?? null,
+};

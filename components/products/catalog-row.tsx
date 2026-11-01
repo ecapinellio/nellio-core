@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { isBlank, isDirty, rowIssues, type CellIssue, type GridColumn, type GridRow } from "@/lib/products/grid";
 import { PRODUCT_UNITS, UNIT_LABELS, type ProductUnit } from "@/lib/products/units";
 import { StatusBadge } from "@/components/status-badge";
+import { CELL_INPUT, CellMessage, DirtyDot, cellInvalid, cellTone } from "@/components/grid/cells";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export interface RowHandlers
@@ -15,10 +16,6 @@ export interface RowHandlers
 	onUnitPick: (key: string, unit: ProductUnit) => void;
 	onToggleActive: (key: string) => void;
 }
-
-// Inputs look like spreadsheet cells until hovered/focused (design spec).
-const CELL_INPUT =
-	"h-9 w-full rounded-sm border border-transparent bg-transparent px-2 text-sm outline-none transition-colors placeholder:text-muted-foreground/60 hover:border-input focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 /**
  * One grid row. memo + stable handlers (eng review D9): typing re-renders
@@ -70,11 +67,7 @@ export const CatalogRow = memo(function CatalogRow({
 
 	return (
 		<tr className={cn("border-b border-border align-top", inactive && "text-muted-foreground")}>
-			<td className="w-4 pt-3.5 pl-1">
-				{isDirty(row)
-					? <span className="block size-1.5 rounded-full bg-primary"><span className="sr-only">Cambio sin guardar</span></span>
-					: null}
-			</td>
+			<DirtyDot dirty={isDirty(row)} />
 			<td className="py-1 pr-2">
 				<input
 					data-cell={`${index}-name`}
@@ -152,26 +145,3 @@ export const CatalogRow = memo(function CatalogRow({
 		</tr>
 	);
 });
-
-function cellInvalid(issue: CellIssue | undefined, attempted: boolean): boolean
-{
-	return issue?.kind === "error" || (issue?.kind === "missing" && attempted);
-}
-
-function cellTone(issue: CellIssue | undefined, attempted: boolean): string
-{
-	return cellInvalid(issue, attempted) ? "border-destructive bg-destructive/5 hover:border-destructive" : "";
-}
-
-function CellMessage({ id, issue, attempted }: { id: string; issue: CellIssue | undefined; attempted: boolean })
-{
-	if (!issue)
-	{
-		return null;
-	}
-	if (issue.kind === "missing")
-	{
-		return attempted ? <p id={id} className="mt-0.5 px-2 text-[11px] font-medium text-destructive">Falta</p> : null;
-	}
-	return <p id={id} className="mt-0.5 px-2 text-[11px] font-medium text-destructive">{issue.message}</p>;
-}

@@ -340,36 +340,20 @@ beyond that initial render and paste fill get slow.
 **Priority:** P3
 **Depends on:** Product catalog page shipped.
 
-### Swapping two names in one grid save fails with "Ya existe"
+### ~~Swapping two names in one grid save fails with "Ya existe"~~ — DONE
 
-**What:** Renaming A→B and B→A (or A→B, B→C with A first) in one save of
-`/customers` or `/products` raises `unique_violation`, shown as "Ya existe un
-cliente con ese nombre." — the friendly pre-check allows it, but the writes
-run row by row against a non-deferrable unique index.
+**Done 2026-11-02:** `save_products()` / `save_customers()` free the names of
+renamed rows before writing, so A→B + B→A saves in one go.
 
-**Why:** Rare (found by the customers `/review`, 2026-11-01), and the
-workaround is two saves. Fix: write renamed rows to a temporary name
-(`name || ' ' || id`) first, then the final names.
+### ~~Format rules only hold through the save RPCs~~ — DONE
 
-**Effort:** S
-**Priority:** P3
-**Depends on:** Nothing.
-
-### Format rules only hold through the save RPCs (direct table writes skip them)
-
-**What:** `customers` still grants INSERT/UPDATE through PostgREST (RLS:
-admin/operator of the tenant), so a direct write can store a non-canonical
-NIT/NRC or an invalid email and skips the conflict check. Options: CHECK
-constraints (`tax_id is null or tax_id = normalize_tax_id(tax_id)`, `NOT
-VALID` for legacy rows), or revoke direct insert/update now that
-`save_customers()` / `quick_add_customer()` exist.
-
-**Why:** Not reachable from the app today (every write goes through the
-RPCs); defense in depth. Same for `products`.
-
-**Effort:** S
-**Priority:** P3
-**Depends on:** Checking ECTEC's existing customer data in prod first.
+**Done 2026-11-02:** trigger `customers_check_formats` checks NIT/NRC/email/
+activity code on direct writes too, and stores them canonical. Only changed
+values, for API roles, so legacy rows ("NIT pendiente") stay editable — which
+is why it's not a `CHECK ... NOT VALID` (re-validates on every update); revoking
+direct writes isn't possible while the RPCs are security invoker. Products was
+already covered by table CHECKs. A direct write still skips the concurrent-edit
+check: that's UX for the grid, not a security rule.
 
 ### ~~Dedicated product catalog page (candidate slice 6)~~ — DONE
 

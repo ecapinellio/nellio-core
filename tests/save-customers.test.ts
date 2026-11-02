@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import { setupTenant, type TestTenant } from "@/tests/fixtures";
 import { createOrder, quickAddCustomer, quickAddProduct, searchCustomers } from "@/lib/supabase/queries";
@@ -9,6 +9,13 @@ import type { CustomerSaveRow } from "@/lib/customers/grid";
 import { saveProductsRpc } from "@/lib/products/catalog";
 
 type Client = SupabaseClient<Database>;
+
+// Pre-trigger data can only be recreated from outside the API roles.
+const service: Client = createClient<Database>(
+	process.env.NEXT_PUBLIC_SUPABASE_URL!,
+	process.env.SUPABASE_SERVICE_ROLE_KEY!,
+	{ auth: { persistSession: false, autoRefreshToken: false } },
+);
 
 let caller: Client;
 vi.mock("server-only", () => ({}));
@@ -94,13 +101,66 @@ describe("customers: save_customers(), formats, deactivation, capture search", (
 			const legacy = unique("Legacy");
 			await saveCustomersRpc(tenant.operator, [newRow(legacy)]);
 			const c = await customer(tenant.admin, legacy);
-			await tenant.admin.from("customers").update({ tax_id: "NIT pendiente" }).eq("id", c.id);
+			await service.from("customers").update({ tax_id: "NIT pendiente" }).eq("id", c.id);
 			const { error } = await saveCustomersRpc(tenant.operator, [await editOf(legacy, { phone: "2222-1111" })]);
 			expect(error).toBeNull();
 			expect((await customer(tenant.admin, legacy)).tax_id).toBe("NIT pendiente");
 			// Legacy whitespace isn't a "change": the grid sends values trimmed.
-			await tenant.admin.from("customers").update({ email: " x@y " }).eq("id", c.id);
+			await service.from("customers").update({ email: " x@y " }).eq("id", c.id);
 			expect((await saveCustomersRpc(tenant.operator, [await editOf(legacy, { phone: "2222-2222", email: "x@y" })])).error).toBeNull();
+		});
+
+		it("swaps two names in one save, and reuses a freed name for a new row", async () =>
+		{
+			const [a, b, c] = [unique("Swap A"), unique("Swap B"), unique("Swap C")];
+			await saveCustomersRpc(tenant.operator, [newRow(a), newRow(b)]);
+			const rowA = await customer(tenant.admin, a);
+			const rowB = await customer(tenant.admin, b);
+
+			const { data, error } = await saveCustomersRpc(tenant.operator, [
+				await editOf(a, { name: b }),
+				await editOf(b, { name: a }),
+			]);
+			expect(error).toBeNull();
+			expect(data?.saved).toBe(2);
+			expect((await customer(tenant.admin, a)).id).toBe(rowB.id);
+			expect((await customer(tenant.admin, b)).id).toBe(rowA.id);
+
+			const moved = await saveCustomersRpc(tenant.operator, [newRow(a), await editOf(a, { name: c })]);
+			expect(moved.error).toBeNull();
+			expect((await customer(tenant.admin, c)).id).toBe(rowB.id);
+			expect((await customer(tenant.admin, a)).id).not.toBe(rowB.id);
+		});
+
+		it("direct table writes can't skip the formats: rejected, stored canonical, legacy values stay", async () =>
+		{
+			const direct = () => tenant.operator.from("customers");
+
+			for (const bad of [{ tax_id: "123" }, { nrc: "abc" }, { email: "x@y" }, { cod_actividad: "12" }])
+			{
+				const { error } = await direct().insert({ tenant_id: tenant.tenantId, name: unique("Direct bad"), ...bad });
+				expect(error?.code).toBe("22023");
+			}
+
+			const name = unique("Direct good");
+			const { error } = await direct().insert({
+				tenant_id: tenant.tenantId, name, tax_id: "06140101901011", nrc: "1234567", email: " a@b.co ", cod_actividad: " 12345 ",
+			});
+			expect(error).toBeNull();
+			expect(await customer(tenant.admin, name)).toMatchObject({
+				tax_id: "0614-010190-101-1", nrc: "123456-7", email: "a@b.co", cod_actividad: "12345",
+			});
+
+			const legacy = unique("Direct legacy");
+			await saveCustomersRpc(tenant.operator, [newRow(legacy)]);
+			const row = await customer(tenant.admin, legacy);
+			await service.from("customers").update({ tax_id: "NIT pendiente" }).eq("id", row.id);
+
+			expect((await direct().update({ phone: "2222-3333" }).eq("id", row.id)).error).toBeNull();
+			expect((await direct().update({ tax_id: "NIT pendiente" }).eq("id", row.id)).error).toBeNull();
+			expect((await direct().update({ tax_id: "otro" }).eq("id", row.id)).error?.code).toBe("22023");
+			expect((await direct().update({ tax_id: "" }).eq("id", row.id)).error).toBeNull();
+			expect((await customer(tenant.admin, legacy)).tax_id).toBeNull();
 		});
 
 		it("is all-or-nothing, takes tenant from the JWT, rejects foreign ids and drivers", async () =>

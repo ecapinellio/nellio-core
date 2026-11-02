@@ -201,6 +201,26 @@ describe("product catalog: save_products(), deactivation, duplicates", () =>
 			expect(error?.code).toBe("22023");
 		});
 
+		it("swaps two names in one save", async () =>
+		{
+			const [a, b] = [unique("Swap A"), unique("Swap B")];
+			await saveProductsRpc(tenant.operator, [
+				{ id: null, name: a, price_per_unit: 1, unit: "kg", active: true, updated_at: null },
+				{ id: null, name: b, price_per_unit: 2, unit: "kg", active: true, updated_at: null },
+			]);
+			const rowA = await product(tenant.admin, a);
+			const rowB = await product(tenant.admin, b);
+
+			const { data, error } = await saveProductsRpc(tenant.operator, [
+				{ id: rowA.id, name: b, price_per_unit: 1, unit: "kg", active: true, updated_at: rowA.updated_at },
+				{ id: rowB.id, name: a, price_per_unit: 2, unit: "kg", active: true, updated_at: rowB.updated_at },
+			]);
+			expect(error).toBeNull();
+			expect(data?.saved).toBe(2);
+			expect((await product(tenant.admin, a)).id).toBe(rowB.id);
+			expect((await product(tenant.admin, b)).id).toBe(rowA.id);
+		});
+
 		it("lets a quick-added product without price be renamed/deactivated, but not clear an existing price", async () =>
 		{
 			const { data: quick } = await quickAddProduct(tenant.operator, unique("Quick"));

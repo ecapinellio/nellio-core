@@ -115,7 +115,7 @@ export const CustomerRowView = memo(function CustomerRowView({
 					)
 					: null}
 			</td>
-			<td className="w-44 py-1 pr-2">
+			<td className="py-1 pr-2">
 				{input("phone", "font-mono tabular-nums")}
 				<CellMessage id={`${row.key}-phone-msg`} issue={issues.phone} attempted={attempted} />
 			</td>
@@ -137,13 +137,13 @@ export const CustomerRowView = memo(function CustomerRowView({
 				/>
 				<CellMessage id={`${row.key}-address-msg`} issue={issues.address} attempted={attempted} />
 			</td>
-			<td className="w-48 py-1 pr-2">
+			<td className="py-1 pr-2">
 				{input("tax_id", "font-mono tabular-nums")}
 				{issues.tax_id
 					? <CellMessage id={`${row.key}-tax_id-msg`} issue={issues.tax_id} attempted={attempted} />
 					: taxNote ? <p className="mt-0.5 px-2 text-[11px] text-muted-foreground">{taxNote}</p> : null}
 			</td>
-			<td className="w-32 py-1">
+			<td className="py-1">
 				{row.original !== null
 					? (
 						<button
@@ -159,7 +159,7 @@ export const CustomerRowView = memo(function CustomerRowView({
 					)
 					: null}
 			</td>
-			<td className="w-32 py-1">
+			<td className="py-1">
 				{!blank
 					? (
 						<button
@@ -167,17 +167,17 @@ export const CustomerRowView = memo(function CustomerRowView({
 							onClick={() => handlers.onOpenFiscal(row.key)}
 							aria-label={`Datos fiscales de ${label}${issues.fiscal && issues.fiscal.kind !== "missing" ? `: ${issues.fiscal.message}` : ""}`}
 							className={cn(
-								"flex h-9 items-center rounded-sm border px-2 text-xs font-medium",
+								"flex h-9 max-w-full items-center truncate rounded-sm border px-2 text-xs font-medium",
 								issues.fiscal
 									? "border-destructive bg-destructive/5 text-destructive"
 									: fiscalCount === FISCAL_FIELDS.length
-										? "border-transparent text-status-delivered hover:border-input"
-										: "border-transparent text-muted-foreground hover:border-input",
+										? "border-input text-status-delivered hover:bg-muted"
+										: "border-input hover:bg-muted",
 							)}
 						>
 							{issues.fiscal && issues.fiscal.kind !== "missing"
 								? issues.fiscal.message
-								: fiscalCount === FISCAL_FIELDS.length ? "Completo" : `Faltan ${FISCAL_FIELDS.length - fiscalCount}`}
+								: fiscalChipLabel(fiscalCount)}
 						</button>
 					)
 					: null}
@@ -185,5 +185,14 @@ export const CustomerRowView = memo(function CustomerRowView({
 		</tr>
 	);
 });
+
+function fiscalChipLabel(filled: number): string
+{
+	if (filled === 0)
+	{
+		return "Agregar";
+	}
+	return filled === FISCAL_FIELDS.length ? "Completo" : `Faltan ${FISCAL_FIELDS.length - filled}`;
+}
 
 const COLUMN_ARIA: Record<CustomerColumn, string> = { name: "Nombre", phone: "Teléfono", address: "Dirección", tax_id: "NIT" };

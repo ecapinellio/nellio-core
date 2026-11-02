@@ -203,7 +203,7 @@ export function CustomersManager({ customers }: { customers: CustomerRecord[] })
 								{ header: "Dirección", value: "Paseo Escalón", width: "7rem" },
 								{ header: "NIT", value: "0614-010190-101-3", numeric: true, width: "9rem" },
 							]}
-							footnote="Si en Excel tus NIT o teléfonos son números, se pueden perder ceros al inicio: dale formato de texto a esas columnas. Los datos fiscales (razón social, NRC, giro) se completan después en la columna Fiscal."
+							footnote="Si en Excel tus NIT o teléfonos son números, se pueden perder ceros al inicio: dale formato de texto a esas columnas. Los datos fiscales (razón social, NRC, giro) se completan después en la columna Datos fiscales."
 							onClose={() => setGuideOpen(false)}
 						/>
 					</div>
@@ -226,32 +226,34 @@ export function CustomersManager({ customers }: { customers: CustomerRecord[] })
 			/>
 
 			<fieldset disabled={saving} aria-busy={saving} className="m-0 hidden min-w-0 border-0 p-0 md:block">
-				<table className="w-full table-fixed border-collapse">
-					<thead>
-						<tr className="border-b border-border text-left text-xs font-medium text-muted-foreground">
-							<th className="w-4" aria-label="Cambios" />
-							<th className="px-2 py-2 font-medium">Nombre</th>
-							<th className="w-44 px-2 py-2 font-medium">Teléfono</th>
-							<th className="px-2 py-2 font-medium">Dirección</th>
-							<th className="w-48 px-2 py-2 font-medium">NIT / DUI</th>
-							<th className="w-32 px-1 py-2 font-medium">Estado</th>
-							<th className="w-32 px-1 py-2 font-medium">Fiscal</th>
-						</tr>
-					</thead>
-					<tbody>
-						{visible.map((row, i) => (
-							<CustomerRowView
-								key={row.key}
-								row={row}
-								index={i}
-								duplicate={duplicates.get(row.key)}
-								ctx={ctx}
-								attempted={attempted}
-								handlers={handlers}
-							/>
-						))}
-					</tbody>
-				</table>
+				<div className="overflow-x-auto">
+					<table className="w-full min-w-190 table-fixed border-collapse">
+						<thead>
+							<tr className="border-b border-border text-left text-xs font-medium text-muted-foreground">
+								<th className="w-4" aria-label="Cambios" />
+								<th className="px-2 py-2 font-medium">Nombre</th>
+								<th className="w-36 px-2 py-2 font-medium">Teléfono</th>
+								<th className="px-2 py-2 font-medium">Dirección</th>
+								<th className="w-44 px-2 py-2 font-medium">NIT / DUI</th>
+								<th className="w-28 px-1 py-2 font-medium">Estado</th>
+								<th className="w-28 px-1 py-2 font-medium">Datos fiscales</th>
+							</tr>
+						</thead>
+						<tbody>
+							{visible.map((row, i) => (
+								<CustomerRowView
+									key={row.key}
+									row={row}
+									index={i}
+									duplicate={duplicates.get(row.key)}
+									ctx={ctx}
+									attempted={attempted}
+									handlers={handlers}
+								/>
+							))}
+						</tbody>
+					</table>
+				</div>
 				{grid.filtering && visible.length === 0
 					? <EmptyFilter search={grid.search} noun="cliente" onClear={grid.clearFilters} />
 					: null}

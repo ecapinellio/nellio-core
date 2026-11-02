@@ -1,5 +1,5 @@
 import { forwardRef } from "react";
-import type { ButtonHTMLAttributes, CSSProperties } from "react";
+import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from "react";
 import { GripVertical } from "lucide-react";
 import type { KanbanOrder } from "@/lib/supabase/queries";
 import { calculateOrderTotal } from "@/lib/order-math";
@@ -27,6 +27,8 @@ interface OrderCardProps
 	 * subsequent click after a real (non-synthetic) pointerdown/up pair.
 	 */
 	dragHandleProps?: ButtonHTMLAttributes<HTMLButtonElement>;
+	/** Replaces the Confirmar slot; the phone board's next-step and "Mover a…" buttons. */
+	actions?: ReactNode;
 }
 
 const MAX_VISIBLE_ITEMS = 3;
@@ -42,7 +44,7 @@ const MAX_VISIBLE_ITEMS = 3;
  * on the root, not a hover treatment.
  */
 export const OrderCard = forwardRef<HTMLDivElement, OrderCardProps>(function OrderCard(
-	{ order, showConfirmButton, onConfirm, onOpenDetail, isDragging, style, className, dragHandleProps },
+	{ order, showConfirmButton, onConfirm, onOpenDetail, isDragging, style, className, dragHandleProps, actions },
 	ref,
 )
 {
@@ -66,15 +68,19 @@ export const OrderCard = forwardRef<HTMLDivElement, OrderCardProps>(function Ord
 		>
 			<div className="flex items-center justify-between gap-2">
 				<span className="font-mono text-xs text-muted-foreground">{order.id.slice(0, 8)}</span>
-				<button
-					type="button"
-					aria-label="Arrastrar para mover"
-					className="touch-none cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
-					{...dragHandleProps}
-					onClick={(e) => e.stopPropagation()}
-				>
-					<GripVertical className="size-4" />
-				</button>
+				{dragHandleProps
+					? (
+						<button
+							type="button"
+							aria-label="Arrastrar para mover"
+							className="touch-none cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
+							{...dragHandleProps}
+							onClick={(e) => e.stopPropagation()}
+						>
+							<GripVertical className="size-4" />
+						</button>
+					)
+					: null}
 			</div>
 
 			<p className="truncate text-sm font-semibold">{order.customerName}</p>
@@ -125,6 +131,7 @@ export const OrderCard = forwardRef<HTMLDivElement, OrderCardProps>(function Ord
 						</Button>
 					)
 					: null}
+				{actions}
 			</div>
 		</div>
 	);

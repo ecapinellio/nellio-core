@@ -23,7 +23,7 @@ export default async function OrdersPage()
 		<div className="flex flex-col gap-4">
 			<div>
 				<h1 className="text-xl font-semibold tracking-tight">Pedidos</h1>
-				<p className="text-sm text-muted-foreground">Arrastra una card para cambiar su estado, o usa el botón Confirmar.</p>
+				<p className="hidden text-sm text-muted-foreground md:block">Arrastra una card para cambiar su estado, o usa el botón Confirmar.</p>
 			</div>
 
 			<OrdersPageContent isAdmin={role === "admin"} />

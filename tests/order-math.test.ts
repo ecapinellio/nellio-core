@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateLineTotal, calculateOrderTotal, groupOrdersByStatus } from "@/lib/order-math";
+import { calculateLineTotal, calculateOrderTotal, groupOrdersByStatus, nextStatusAction } from "@/lib/order-math";
 
 describe("calculateLineTotal", () =>
 {
@@ -60,6 +60,17 @@ describe("calculateOrderTotal", () =>
 	it("returns total 0, unpricedCount 0 for an empty order", () =>
 	{
 		expect(calculateOrderTotal([])).toEqual({ total: 0, unpricedCount: 0 });
+	});
+});
+
+describe("nextStatusAction", () =>
+{
+	it("walks the pipeline and stops at delivered", () =>
+	{
+		expect(nextStatusAction("pending")).toEqual({ status: "confirmed", label: "Confirmar" });
+		expect(nextStatusAction("confirmed")).toEqual({ status: "dispatched", label: "Despachar" });
+		expect(nextStatusAction("dispatched")).toEqual({ status: "delivered", label: "Entregar" });
+		expect(nextStatusAction("delivered")).toBeNull();
 	});
 });
 

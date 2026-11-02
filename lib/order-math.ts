@@ -23,6 +23,25 @@ export function calculateLineTotal(quantity: number, pricePerUnit: number | null
 export const ORDER_STATUSES = ["pending", "confirmed", "dispatched", "delivered"] as const;
 export type OrderStatus = typeof ORDER_STATUSES[number];
 
+export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
+	pending: "Pendiente",
+	confirmed: "Confirmado",
+	dispatched: "Despachado",
+	delivered: "Entregado",
+};
+
+const NEXT_STATUS_ACTIONS: Partial<Record<OrderStatus, { status: OrderStatus; label: string }>> = {
+	pending: { status: "confirmed", label: "Confirmar" },
+	confirmed: { status: "dispatched", label: "Despachar" },
+	dispatched: { status: "delivered", label: "Entregar" },
+};
+
+/** The usual next step for an order; null once it's delivered. */
+export function nextStatusAction(status: OrderStatus): { status: OrderStatus; label: string } | null
+{
+	return NEXT_STATUS_ACTIONS[status] ?? null;
+}
+
 export function isOrderStatus(status: string): status is OrderStatus
 {
 	return (ORDER_STATUSES as readonly string[]).includes(status);

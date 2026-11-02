@@ -27,7 +27,12 @@ phone-first, so this should land before that.
 **Depends on:** Nothing. Should precede the driver delivery view and the
 mobile kanban TODO below.
 
-### Mobile-friendly kanban board at /orders
+### ~~Mobile-friendly kanban board at /orders~~ — DONE
+
+**Done 2026-11-02:** below `md`, status tabs with counts, a next-step button and
+"Mover a…" on each card, and an undo bar (`components/orders/orders-mobile-board.tsx`).
+No touch drag: it fights the list's scroll. The desktop board is unchanged.
+
 
 **What:** A deliberate mobile layout for the kanban board itself (columns,
 drag-and-drop), not just the order detail dialog.

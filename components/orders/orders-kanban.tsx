@@ -20,6 +20,7 @@ import { ORDER_STATUSES, groupOrdersByStatus, isOrderStatus, type OrderStatus } 
 import { KanbanColumn } from "@/components/orders/kanban-column";
 import { OrderCard } from "@/components/orders/order-card";
 import { OrderDetailDialog } from "@/components/orders/order-detail-dialog";
+import { OrdersMobileBoard } from "@/components/orders/orders-mobile-board";
 
 function SortableOrderCard({
 	order,
@@ -164,30 +165,31 @@ export function OrdersKanban({ onOrderChanged }: OrdersKanbanProps)
 	// Optimistic update, reverted on error (failure mode: network error
 	// mid-drag) — the operator sees the move happen immediately, not after
 	// a round trip, since that's the whole point of drag-and-drop.
-	async function moveOrder(orderId: string, newStatus: OrderStatus)
+	// Functional updates, and the revert touches this order only: on a phone
+	// two quick moves can overlap, and restoring a snapshot would undo the other.
+	async function moveOrder(orderId: string, newStatus: OrderStatus): Promise<boolean>
 	{
-		if (!orders)
-		{
-			return;
-		}
-		const current = orders.find((order) => order.id === orderId);
+		const current = orders?.find((order) => order.id === orderId);
 		if (!current || current.status === newStatus)
 		{
-			return;
+			return false;
 		}
 
-		const previous = orders;
+		const setStatus = (status: string) => setOrders((all) =>
+			all && all.map((order) => (order.id === orderId ? { ...order, status } : order)));
+
 		setActionError(null);
-		setOrders(orders.map((order) => (order.id === orderId ? { ...order, status: newStatus } : order)));
+		setStatus(newStatus);
 
 		const { error } = await updateOrderStatus(supabase, orderId, newStatus);
 		if (error)
 		{
-			setOrders(previous);
+			setStatus(current.status);
 			setActionError("No se pudo actualizar el pedido. Intenta de nuevo.");
-			return;
+			return false;
 		}
 		onOrderChanged?.();
+		return true;
 	}
 
 	function handleDragStart(event: DragStartEvent)
@@ -224,28 +226,34 @@ export function OrdersKanban({ onOrderChanged }: OrdersKanbanProps)
 		<div className="flex flex-col gap-3">
 			{actionError ? <p className="text-sm text-destructive">{actionError}</p> : null}
 
-			<DndContext
-				sensors={sensors}
-				collisionDetection={closestCenter}
-				onDragStart={handleDragStart}
-				onDragEnd={handleDragEnd}
-			>
-				<div className="flex h-[calc(100vh-10rem)] gap-4 overflow-x-auto pb-2">
-					{ORDER_STATUSES.map((status) => (
-						<DroppableColumn
-							key={status}
-							status={status}
-							orders={groups[status]}
-							onConfirm={(orderId) => moveOrder(orderId, "confirmed")}
-							onOpenDetail={setOpenOrderId}
-						/>
-					))}
-				</div>
+			<div className="md:hidden">
+				<OrdersMobileBoard groups={groups} onMove={moveOrder} onOpenDetail={setOpenOrderId} />
+			</div>
 
-				<DragOverlay>
-					{activeOrder ? <OrderCard order={activeOrder} isDragging /> : null}
-				</DragOverlay>
-			</DndContext>
+			<div className="hidden md:block">
+				<DndContext
+					sensors={sensors}
+					collisionDetection={closestCenter}
+					onDragStart={handleDragStart}
+					onDragEnd={handleDragEnd}
+				>
+					<div className="flex h-[calc(100vh-10rem)] gap-4 overflow-x-auto pb-2">
+						{ORDER_STATUSES.map((status) => (
+							<DroppableColumn
+								key={status}
+								status={status}
+								orders={groups[status]}
+								onConfirm={(orderId) => moveOrder(orderId, "confirmed")}
+								onOpenDetail={setOpenOrderId}
+							/>
+						))}
+					</div>
+
+					<DragOverlay>
+						{activeOrder ? <OrderCard order={activeOrder} isDragging dragHandleProps={{}} /> : null}
+					</DragOverlay>
+				</DndContext>
+			</div>
 
 			<OrderDetailDialog
 				orderId={openOrderId}

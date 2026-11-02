@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	DndContext,
 	DragOverlay,
@@ -14,6 +14,7 @@ import {
 import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { useRefreshOnReturn } from "@/hooks/use-refresh-on-return";
 import { createClient } from "@/lib/supabase/client";
 import { listOrdersForKanban, updateOrderStatus, type KanbanOrder } from "@/lib/supabase/queries";
 import { ORDER_STATUSES, applyPendingMoves, groupOrdersByStatus, isOrderStatus, type OrderStatus } from "@/lib/order-math";
@@ -123,6 +124,34 @@ export function OrdersKanban({ onOrderChanged }: OrdersKanbanProps)
 	// Bumped when a move starts or lands: a refetch that spans one re-reads.
 	const movesVersion = useRef(0);
 
+	const fetchLatestOrders = useCallback(async () =>
+	{
+		let version;
+		let result;
+		do
+		{
+			version = movesVersion.current;
+			result = await listOrdersForKanban(supabase);
+		}
+		while (version !== movesVersion.current);
+		return result;
+	}, [supabase]);
+
+	// The board doesn't live-update, so a screen left open goes stale. Quiet: a
+	// failed refresh keeps what's on screen instead of raising an error for
+	// something the user didn't do.
+	const refreshOnReturn = useCallback(async () =>
+	{
+		const { data, error } = await fetchLatestOrders();
+		if (!error && data)
+		{
+			setOrders(applyPendingMoves(data, pendingMoves.current));
+			onOrderChanged?.();
+		}
+	}, [fetchLatestOrders, onOrderChanged]);
+
+	useRefreshOnReturn(refreshOnReturn);
+
 	useEffect(() =>
 	{
 		let active = true;
@@ -156,21 +185,13 @@ export function OrdersKanban({ onOrderChanged }: OrdersKanbanProps)
 	/** Post-save refetch (eng-review Decision 6) — a full re-fetch, not an in-memory patch, since this is a deliberate low-frequency action, not a frequent drag. */
 	async function refetchOrders()
 	{
-		let version;
-		let result;
-		do
-		{
-			version = movesVersion.current;
-			result = await listOrdersForKanban(supabase);
-		}
-		while (version !== movesVersion.current);
-
-		if (result.error || !result.data)
+		const { data, error } = await fetchLatestOrders();
+		if (error || !data)
 		{
 			setActionError("No se pudieron actualizar los pedidos. Refrescá la página.");
 			return;
 		}
-		setOrders(applyPendingMoves(result.data, pendingMoves.current));
+		setOrders(applyPendingMoves(data, pendingMoves.current));
 	}
 
 	// Optimistic update, reverted on error (failure mode: network error

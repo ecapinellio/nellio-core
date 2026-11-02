@@ -72,18 +72,20 @@ active orders, so neither hurts yet.
 **Priority:** P3
 **Depends on:** Nothing.
 
-### Board doesn't live-update
+### Live updates on the orders board (Supabase Realtime)
 
-**What:** `/orders` loads once. Moves from a stale screen are now rejected with
-"Este pedido cambió" (expected-status check in `updateOrderStatus()`), but the
-board still shows old data until then. Realtime, or refetch on tab focus.
+**What:** Push moves to open boards instead of waiting for the user to come back.
 
-**Why:** Two people working the board see different counts. Found by `/review`
-(2026-11-02).
+**Why:** Done 2026-11-03: `/orders` refreshes when the tab, window or phone app
+regains focus, and stale moves are rejected. Two people looking at the board at
+the same time, without leaving it, still see different counts until they do.
 
-**Effort:** S
-**Priority:** P2
-**Depends on:** Nothing.
+**Context:** Only if the pilot shows it matters. Needs a check of how Realtime
+behaves with RLS and `tenant_id()` (ADR-009).
+
+**Effort:** M
+**Priority:** P3
+**Depends on:** Pilot feedback.
 
 ### Role-differentiated permissions for order-detail price overrides
 

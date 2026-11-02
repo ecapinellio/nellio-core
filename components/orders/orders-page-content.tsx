@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { OrderStats } from "@/components/orders/order-stats";
 import { OrdersKanban } from "@/components/orders/orders-kanban";
 
@@ -27,11 +27,12 @@ interface OrdersPageContentProps
 export function OrdersPageContent({ isAdmin }: OrdersPageContentProps)
 {
 	const [statsRefreshKey, setStatsRefreshKey] = useState(0);
+	const refreshStats = useCallback(() => setStatsRefreshKey((key) => key + 1), []);
 
 	return (
 		<>
 			{isAdmin ? <OrderStats refreshKey={statsRefreshKey} /> : null}
-			<OrdersKanban onOrderChanged={() => setStatsRefreshKey((key) => key + 1)} />
+			<OrdersKanban onOrderChanged={refreshStats} />
 		</>
 	);
 }

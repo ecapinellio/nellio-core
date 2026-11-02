@@ -14,6 +14,7 @@ import {
 import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { useOrdersLive } from "@/hooks/use-orders-live";
 import { useRefreshOnReturn } from "@/hooks/use-refresh-on-return";
 import { createClient } from "@/lib/supabase/client";
 import { listOrdersForKanban, updateOrderStatus, type KanbanOrder } from "@/lib/supabase/queries";
@@ -97,6 +98,8 @@ function resolveTargetStatus(overId: string, orders: KanbanOrder[]): OrderStatus
 	return target && isOrderStatus(target.status) ? target.status : null;
 }
 
+const ERROR_MS = 8000;
+
 interface OrdersKanbanProps
 {
 	/**
@@ -105,6 +108,8 @@ interface OrdersKanbanProps
 	 * it has no way to know this board just mutated data unless told.
 	 */
 	onOrderChanged?: () => void;
+	/** From the JWT, picks the live channel; RLS still decides what arrives (ADR-010). */
+	tenantId: string;
 }
 
 /**
@@ -112,7 +117,7 @@ interface OrdersKanbanProps
  * RLS/role (T8) already gates WHO can move a card; the sequence they move
  * it in isn't enforced here.
  */
-export function OrdersKanban({ onOrderChanged }: OrdersKanbanProps)
+export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 {
 	const supabase = useMemo(() => createClient(), []);
 	const [orders, setOrders] = useState<KanbanOrder[] | null>(null);
@@ -123,6 +128,9 @@ export function OrdersKanban({ onOrderChanged }: OrdersKanbanProps)
 	const pendingMoves = useRef(new Map<string, OrderStatus>());
 	// Bumped when a move starts or lands: a refetch that spans one re-reads.
 	const movesVersion = useRef(0);
+	const refreshSequence = useRef(0);
+	const dragging = useRef(false);
+	const refreshAfterDrag = useRef(false);
 
 	const fetchLatestOrders = useCallback(async () =>
 	{
@@ -137,20 +145,44 @@ export function OrdersKanban({ onOrderChanged }: OrdersKanbanProps)
 		return result;
 	}, [supabase]);
 
-	// The board doesn't live-update, so a screen left open goes stale. Quiet: a
-	// failed refresh keeps what's on screen instead of raising an error for
-	// something the user didn't do.
-	const refreshOnReturn = useCallback(async () =>
+	// Someone else's change, or coming back to the screen. Quiet: a failed
+	// refresh keeps what's on screen instead of raising an error for something
+	// the user didn't do. Never mid-drag (the board would shift under the
+	// finger), and only the newest response wins.
+	const refreshBoard = useCallback(async () =>
 	{
-		const { data, error } = await fetchLatestOrders();
-		if (!error && data)
+		if (dragging.current)
 		{
-			setOrders(applyPendingMoves(data, pendingMoves.current));
-			onOrderChanged?.();
+			refreshAfterDrag.current = true;
+			return;
 		}
+		const sequence = ++refreshSequence.current;
+		const { data, error } = await fetchLatestOrders();
+		if (error || !data || sequence !== refreshSequence.current)
+		{
+			return;
+		}
+		if (dragging.current)
+		{
+			refreshAfterDrag.current = true;
+			return;
+		}
+		setOrders(applyPendingMoves(data, pendingMoves.current));
+		onOrderChanged?.();
 	}, [fetchLatestOrders, onOrderChanged]);
 
-	useRefreshOnReturn(refreshOnReturn);
+	useRefreshOnReturn(refreshBoard);
+	useOrdersLive(supabase, tenantId, refreshBoard);
+
+	useEffect(() =>
+	{
+		if (!actionError)
+		{
+			return;
+		}
+		const timer = setTimeout(() => setActionError(null), ERROR_MS);
+		return () => clearTimeout(timer);
+	}, [actionError]);
 
 	useEffect(() =>
 	{
@@ -240,22 +272,30 @@ export function OrdersKanban({ onOrderChanged }: OrdersKanbanProps)
 
 	function handleDragStart(event: DragStartEvent)
 	{
+		dragging.current = true;
 		setActiveId(String(event.active.id));
+	}
+
+	function finishDrag()
+	{
+		dragging.current = false;
+		setActiveId(null);
+		if (refreshAfterDrag.current)
+		{
+			refreshAfterDrag.current = false;
+			refreshBoard();
+		}
 	}
 
 	function handleDragEnd(event: DragEndEvent)
 	{
-		setActiveId(null);
 		const { active, over } = event;
-		if (!over || !orders)
-		{
-			return;
-		}
-		const newStatus = resolveTargetStatus(String(over.id), orders);
+		const newStatus = over && orders ? resolveTargetStatus(String(over.id), orders) : null;
 		if (newStatus)
 		{
 			moveOrder(String(active.id), newStatus);
 		}
+		finishDrag();
 	}
 
 	if (loadError)
@@ -270,7 +310,13 @@ export function OrdersKanban({ onOrderChanged }: OrdersKanbanProps)
 
 	return (
 		<div className="flex flex-col gap-3">
-			{actionError ? <p className="hidden text-sm text-destructive md:block">{actionError}</p> : null}
+			{actionError
+				? (
+					<p role="alert" className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-40 rounded-md border border-destructive bg-background px-4 py-3 text-sm font-medium text-destructive shadow-md md:inset-x-auto md:right-6 md:max-w-md">
+						{actionError}
+					</p>
+				)
+				: null}
 
 			<div className="md:hidden">
 				<OrdersMobileBoard groups={groups} error={actionError} onMove={moveOrder} onOpenDetail={setOpenOrderId} />
@@ -282,6 +328,7 @@ export function OrdersKanban({ onOrderChanged }: OrdersKanbanProps)
 					collisionDetection={closestCenter}
 					onDragStart={handleDragStart}
 					onDragEnd={handleDragEnd}
+					onDragCancel={finishDrag}
 				>
 					<div className="flex h-[calc(100vh-10rem)] gap-4 overflow-x-auto pb-2">
 						{ORDER_STATUSES.map((status) => (

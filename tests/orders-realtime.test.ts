@@ -1,0 +1,150 @@
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createClient, type RealtimeChannel, type SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/supabase/database.types";
+import { setupTenant, type TestTenant } from "@/tests/fixtures";
+import { createOrder, quickAddCustomer, quickAddProduct, updateOrderStatus } from "@/lib/supabase/queries";
+import { subscribeToOrders } from "@/lib/supabase/orders-live";
+
+// How long "no event arrived" is waited for. Realtime usually delivers in ms.
+const QUIET_MS = 1500;
+
+const service = createClient<Database>(
+	process.env.NEXT_PUBLIC_SUPABASE_URL!,
+	process.env.SUPABASE_SERVICE_ROLE_KEY!,
+	{ auth: { persistSession: false, autoRefreshToken: false } },
+);
+
+describe("live /orders (ADR-010)", () =>
+{
+	let tenant: TestTenant;
+	let otherTenant: TestTenant;
+	let orderId: string;
+	const channels: [SupabaseClient<Database>, RealtimeChannel][] = [];
+
+	/** Subscribes for real and returns a live count of the events received. */
+	async function listen(client: SupabaseClient<Database>, tenantId: string)
+	{
+		const received = { count: 0 };
+		await new Promise<void>((resolve) =>
+		{
+			subscribeToOrders(client, tenantId, () => received.count++, resolve)
+				.then((channel) => channels.push([client, channel]));
+		});
+		// SUBSCRIBED is the channel; the database listener lands just after it.
+		await new Promise((resolve) => setTimeout(resolve, QUIET_MS));
+		return received;
+	}
+
+	async function settle(received: { count: number }, expectEvent: boolean)
+	{
+		await expect.poll(() => received.count > 0, { timeout: expectEvent ? 5000 : QUIET_MS }).toBe(expectEvent);
+		if (!expectEvent)
+		{
+			await new Promise((resolve) => setTimeout(resolve, QUIET_MS));
+			expect(received.count).toBe(0);
+		}
+	}
+
+	async function stop()
+	{
+		await Promise.all(channels.splice(0).map(([client, channel]) => client.removeChannel(channel)));
+	}
+
+	beforeAll(async () =>
+	{
+		[tenant, otherTenant] = await Promise.all([setupTenant(), setupTenant()]);
+		const [{ data: customer }, { data: product }] = await Promise.all([
+			quickAddCustomer(tenant.admin, "Realtime Customer"),
+			quickAddProduct(tenant.admin, "Realtime Product", { pricePerUnit: 8, unit: "each" }),
+		]);
+		const { data } = await createOrder(tenant.admin, {
+			customer_id: customer!.id,
+			notes: "realtime fixture",
+			items: [{ product_id: product!.id, quantity: 1 }],
+		});
+		orderId = data!.order.id;
+
+		// Realtime starts replicating with its first subscriber and events before
+		// that are lost: poke until one arrives so no test depends on the cold start.
+		const warm = await listen(tenant.operator, tenant.tenantId);
+		for (let attempt = 0; attempt < 60 && warm.count === 0; attempt++)
+		{
+			await tenant.admin.from("orders").update({ notes: "realtime warm-up" }).eq("id", orderId);
+			await new Promise((resolve) => setTimeout(resolve, 500));
+		}
+		await stop();
+	}, 40_000);
+
+	afterAll(async () =>
+	{
+		await stop();
+		await Promise.all([tenant.teardown(), otherTenant.teardown()]);
+	});
+
+	it("tells another session of the same tenant when an order moves", async () =>
+	{
+		const received = await listen(tenant.operator, tenant.tenantId);
+		await updateOrderStatus(tenant.admin, orderId, "confirmed");
+		await settle(received, true);
+		await stop();
+	});
+
+	// The browser client restores its session from cookies, so nothing signs in
+	// and Realtime would connect as anon, seeing nothing through RLS.
+	it("works for a client that restored its session instead of signing in", async () =>
+	{
+		const { data: { session } } = await tenant.operator.auth.getSession();
+		const saved = new Map([["restored", JSON.stringify(session)]]);
+		const restored = createClient<Database>(
+			process.env.NEXT_PUBLIC_SUPABASE_URL!,
+			process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+			{
+				auth: {
+					storageKey: "restored",
+					autoRefreshToken: false,
+					storage: {
+						getItem: (key) => saved.get(key) ?? null,
+						setItem: (key, value) => void saved.set(key, value),
+						removeItem: (key) => void saved.delete(key),
+					},
+				},
+			},
+		);
+
+		const received = await listen(restored, tenant.tenantId);
+		await tenant.admin.from("orders").update({ notes: "restored session" }).eq("id", orderId);
+		await settle(received, true);
+		await stop();
+	});
+
+	it("tells another session when a line of an order changes", async () =>
+	{
+		const received = await listen(tenant.operator, tenant.tenantId);
+		await tenant.admin.from("order_items").update({ quantity: 2 }).eq("order_id", orderId);
+		await settle(received, true);
+		await stop();
+	});
+
+	it("tells nothing to another tenant, even with a forged filter", async () =>
+	{
+		const control = await listen(tenant.operator, tenant.tenantId);
+		const own = await listen(otherTenant.operator, otherTenant.tenantId);
+		const forged = await listen(otherTenant.admin, tenant.tenantId);
+		await updateOrderStatus(tenant.admin, orderId, "dispatched");
+		await settle(control, true);
+		await settle(own, false);
+		await settle(forged, false);
+		await stop();
+	});
+
+	it("stops telling a deactivated user (ADR-009)", async () =>
+	{
+		const control = await listen(tenant.operator, tenant.tenantId);
+		const received = await listen(tenant.driver, tenant.tenantId);
+		await service.auth.admin.updateUserById(tenant.driverId, { ban_duration: "1h" });
+		await updateOrderStatus(tenant.admin, orderId, "delivered");
+		await settle(control, true);
+		await settle(received, false);
+		await stop();
+	});
+});

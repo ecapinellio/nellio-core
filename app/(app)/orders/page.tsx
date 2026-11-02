@@ -26,7 +26,7 @@ export default async function OrdersPage()
 				<p className="hidden text-sm text-muted-foreground md:block">Arrastra una card para cambiar su estado, o usa el botón Confirmar.</p>
 			</div>
 
-			<OrdersPageContent isAdmin={role === "admin"} />
+			<OrdersPageContent isAdmin={role === "admin"} tenantId={user?.app_metadata.tenant_id ?? ""} />
 		</div>
 	);
 }

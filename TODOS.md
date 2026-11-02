@@ -72,16 +72,25 @@ active orders, so neither hurts yet.
 **Priority:** P3
 **Depends on:** Nothing.
 
-### Live updates on the orders board (Supabase Realtime)
+### Order detail dialog doesn't follow live changes
 
-**What:** Push moves to open boards instead of waiting for the user to come back.
+**What:** The board updates live (ADR-010), but an open order detail keeps what
+it loaded. Saving it can overwrite a price or quantity someone else just
+changed. Fix: a concurrent-edit check in `update_order_detail()`, like the grids.
 
-**Why:** Done 2026-11-03: `/orders` refreshes when the tab, window or phone app
-regains focus, and stale moves are rejected. Two people looking at the board at
-the same time, without leaving it, still see different counts until they do.
+**Why:** Found while adding live updates (2026-11-03). Needs two people editing
+the same order within the same minute.
 
-**Context:** Only if the pilot shows it matters. Needs a check of how Realtime
-behaves with RLS and `tenant_id()` (ADR-009).
+**Effort:** S
+**Priority:** P2
+**Depends on:** Nothing.
+
+### Show who else changed an order
+
+**What:** Nothing tells you a card moved because a colleague moved it (no author
+on the card, no activity log). Pairs with the change-history TODOs above.
+
+**Why:** Jira-style tools show it; a live board can feel like cards jump alone.
 
 **Effort:** M
 **Priority:** P3

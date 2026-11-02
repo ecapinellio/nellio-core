@@ -35,7 +35,7 @@ interface UndoState
 interface OrdersMobileBoardProps
 {
 	groups: Record<OrderStatus, KanbanOrder[]>;
-	/** Shown in the fixed bar: an error above the board is out of view once the list scrolls. */
+	/** The board shows it in a fixed bar; here it replaces the undo bar and keeps the list clear of it. */
 	error: string | null;
 	/** Resolves to false if the move failed (the board shows the error). */
 	onMove: (orderId: string, status: OrderStatus) => Promise<boolean>;
@@ -236,13 +236,6 @@ export function OrdersMobileBoard({ groups, error, onMove, onOpenDetail }: Order
 			</Sheet>
 
 			<div aria-live="polite">
-				{error
-					? (
-						<p role="alert" className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-40 rounded-md border border-destructive bg-background px-4 py-3 text-sm text-destructive shadow-md">
-							{error}
-						</p>
-					)
-					: null}
 				{undo && !error
 					? (
 						<div className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-40 flex items-center justify-between gap-2 rounded-md bg-foreground py-1 pl-4 pr-1 text-sm text-background shadow-md">

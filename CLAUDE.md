@@ -152,6 +152,21 @@ perdido.
 evaluarla una vez por consulta, no por fila. Toda política nueva debe usar la
 misma forma. `tenant_id()` es `security definer` (lee `auth.*`).
 
+### ADR-010: `/orders` en vivo con Supabase Realtime como señal, no como datos
+**Decisión:** el tablero se suscribe a cambios de `orders` y `order_items` del
+tenant (`postgres_changes`) y, ante cualquier evento, **vuelve a pedir la lista**.
+El contenido del evento no se usa. También recarga al volver a la pestaña/app y
+al reconectar. El arrastre difiere la recarga hasta soltar.
+**Por qué:** varios usuarios trabajan el mismo tablero a la vez. Recargar reusa
+la misma consulta y RLS; aplicar eventos sueltos duplicaría esa lógica y se
+descuadraría con cualquier evento perdido (un corte de red los pierde).
+**Consecuencias:** Realtime evalúa el RLS de cada suscriptor, así que el
+aislamiento por tenant y la revocación (ADR-009) aplican igual; lo cubre
+`tests/orders-realtime.test.ts`. El filtro `tenant_id` del canal solo reduce
+trabajo, no es seguridad. Toda tabla que deba verse en vivo se agrega a la
+publicación `supabase_realtime` por migración. Los movimientos desde una vista
+vieja se siguen rechazando (`updateOrderStatus` con estado esperado).
+
 ---
 
 ## Vistas del frontend por rol (Fase 1)
@@ -244,7 +259,8 @@ desactivados; y la lógica pura de la tabla en `lib/products/`), los clientes
 (`save_customers()`: formatos de NIT/NRC, NIT compartido, solo actualiza los
 campos enviados, conflictos; búsqueda por teléfono/NIT; y `lib/customers/`),
 la tabla genérica (`lib/grid/core.ts`), y el cambio de contraseña obligatorio
-al primer ingreso (`must_change_password`).
+al primer ingreso (`must_change_password`), y `/orders` en vivo (`subscribeToOrders()`:
+eventos por tenant, aislamiento, revocación).
 
 **CI:** `.github/workflows/test.yml` corre la suite en cada push/PR contra un
 stack de Supabase local efímero (sin secrets — son las keys demo locales).

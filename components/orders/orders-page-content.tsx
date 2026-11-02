@@ -7,6 +7,7 @@ import { OrdersKanban } from "@/components/orders/orders-kanban";
 interface OrdersPageContentProps
 {
 	isAdmin: boolean;
+	tenantId: string;
 }
 
 /**
@@ -24,7 +25,7 @@ interface OrdersPageContentProps
  * to this thin client wrapper. OrderStats still never mounts for a
  * non-admin viewer.
  */
-export function OrdersPageContent({ isAdmin }: OrdersPageContentProps)
+export function OrdersPageContent({ isAdmin, tenantId }: OrdersPageContentProps)
 {
 	const [statsRefreshKey, setStatsRefreshKey] = useState(0);
 	const refreshStats = useCallback(() => setStatsRefreshKey((key) => key + 1), []);
@@ -32,7 +33,7 @@ export function OrdersPageContent({ isAdmin }: OrdersPageContentProps)
 	return (
 		<>
 			{isAdmin ? <OrderStats refreshKey={statsRefreshKey} /> : null}
-			<OrdersKanban onOrderChanged={refreshStats} />
+			<OrdersKanban onOrderChanged={refreshStats} tenantId={tenantId} />
 		</>
 	);
 }

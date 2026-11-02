@@ -1,6 +1,7 @@
 /**
  * El Salvador fiscal-field formats — the same rules as the SQL helpers
- * normalize_tax_id() / normalize_nrc() and save_customers()' checks.
+ * normalize_tax_id() / normalize_nrc() and the checks in save_customers() and
+ * check_customer_formats().
  */
 
 /**

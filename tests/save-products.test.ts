@@ -221,6 +221,50 @@ describe("product catalog: save_products(), deactivation, duplicates", () =>
 			expect((await product(tenant.admin, b)).id).toBe(rowA.id);
 		});
 
+		it("handles a rename chain, and reuses a freed name for a new row", async () =>
+		{
+			const [a, b, c, d] = [unique("Chain A"), unique("Chain B"), unique("Chain C"), unique("Chain D")];
+			await saveProductsRpc(tenant.operator, [newRow(a), newRow(b)]);
+			const rowA = await product(tenant.admin, a);
+			const rowB = await product(tenant.admin, b);
+			const edit = (row: typeof rowA, name: string) => ({ ...newRow(name), id: row.id, updated_at: row.updated_at });
+
+			expect((await saveProductsRpc(tenant.operator, [edit(rowA, b), edit(rowB, c)])).error).toBeNull();
+			expect((await product(tenant.admin, b)).id).toBe(rowA.id);
+			expect((await product(tenant.admin, c)).id).toBe(rowB.id);
+
+			const current = await product(tenant.admin, c);
+			expect((await saveProductsRpc(tenant.operator, [newRow(c), edit(current, d)])).error).toBeNull();
+			expect((await product(tenant.admin, d)).id).toBe(rowB.id);
+		});
+
+		it("a stale row is a conflict even if it would clear a price, and the same id twice is rejected", async () =>
+		{
+			const { data: quick } = await quickAddProduct(tenant.admin, unique("Stale"));
+			await tenant.operator.from("products").update({ price_per_unit: 5, unit: "kg" }).eq("id", quick!.id);
+			const stale = { ...newRow(quick!.name), id: quick!.id, price_per_unit: null, unit: null, updated_at: quick!.updated_at };
+
+			const { data, error } = await saveProductsRpc(tenant.operator, [stale]);
+			expect(error).toBeNull();
+			expect(data?.conflicts).toHaveLength(1);
+
+			const twice = await product(tenant.admin, quick!.name);
+			const row = { ...newRow(twice.name), id: twice.id, updated_at: twice.updated_at };
+			expect((await saveProductsRpc(tenant.operator, [row, row])).error?.code).toBe("22023");
+		});
+
+		it("renames a full 1000-row batch within the statement timeout", async () =>
+		{
+			const names = Array.from({ length: 1000 }, (_, i) => `${unique("Ciclo")} ítem ${i}`);
+			await saveProductsRpc(tenant.operator, names.map((name) => newRow(name)));
+			const { data: rows } = await tenant.admin.from("products").select("*").like("name", "Ciclo %").limit(1000);
+			const edits = rows!.map((r, i) => ({ ...newRow(rows![(i + 1) % rows!.length].name), id: r.id, updated_at: r.updated_at }));
+
+			const { data, error } = await saveProductsRpc(tenant.operator, edits);
+			expect(error).toBeNull();
+			expect(data!.saved).toBe(1000);
+		}, 30_000);
+
 		it("lets a quick-added product without price be renamed/deactivated, but not clear an existing price", async () =>
 		{
 			const { data: quick } = await quickAddProduct(tenant.operator, unique("Quick"));

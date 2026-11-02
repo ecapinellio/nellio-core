@@ -132,6 +132,69 @@ describe("customers: save_customers(), formats, deactivation, capture search", (
 			expect((await customer(tenant.admin, a)).id).not.toBe(rowB.id);
 		});
 
+		it("handles a rename chain, and a name that looks like another row's id", async () =>
+		{
+			const [a, b, c] = [unique("Chain A"), unique("Chain B"), unique("Chain C")];
+			await saveCustomersRpc(tenant.operator, [newRow(a), newRow(b)]);
+			const rowA = await customer(tenant.admin, a);
+			const rowB = await customer(tenant.admin, b);
+			expect((await saveCustomersRpc(tenant.operator, [await editOf(a, { name: b }), await editOf(b, { name: c })])).error).toBeNull();
+			expect((await customer(tenant.admin, b)).id).toBe(rowA.id);
+			expect((await customer(tenant.admin, c)).id).toBe(rowB.id);
+
+			const [squatter, victim] = [unique("Squatter"), unique("Victim")];
+			await saveCustomersRpc(tenant.operator, [newRow(squatter), newRow(victim)]);
+			const target = await customer(tenant.admin, victim);
+			await saveCustomersRpc(tenant.operator, [await editOf(squatter, { name: target.id })]);
+			const renamed = unique("Victim renamed");
+			expect((await saveCustomersRpc(tenant.operator, [await editOf(victim, { name: renamed })])).error).toBeNull();
+		});
+
+		it("a stale row is a conflict, not a format error on a value the user didn't touch", async () =>
+		{
+			const name = unique("Stale");
+			await saveCustomersRpc(tenant.operator, [newRow(name)]);
+			const row = await customer(tenant.admin, name);
+			await service.from("customers").update({ tax_id: "NIT pendiente" }).eq("id", row.id);
+			const stale = await editOf(name, {});
+			await tenant.operator.from("customers").update({ tax_id: "06140101901011" }).eq("id", row.id);
+
+			const { data, error } = await saveCustomersRpc(tenant.operator, [stale]);
+			expect(error).toBeNull();
+			expect(data?.conflicts).toHaveLength(1);
+		});
+
+		it("rejects the same id twice in one save", async () =>
+		{
+			const name = unique("Twice");
+			await saveCustomersRpc(tenant.operator, [newRow(name)]);
+			const edit = await editOf(name, {});
+			const { error } = await saveCustomersRpc(tenant.operator, [{ ...edit, name: unique("Twice C") }, { ...edit, name: unique("Twice D") }]);
+			expect(error?.code).toBe("22023");
+			expect((await customer(tenant.admin, name)).id).toBe(edit.id);
+		});
+
+		it.each([
+			["tax_id", "123", "06140101901011", "0614-010190-101-1"],
+			["nrc", "abc", "1234567", "123456-7"],
+			["email", "x@y", " a@b.co ", "a@b.co"],
+			["cod_actividad", "12", " 12345 ", "12345"],
+		] as const)("direct update of %s: rejects, canonicalizes, ignores padding, clears", async (field, bad, good, canonical) =>
+		{
+			const name = unique("Direct update");
+			await saveCustomersRpc(tenant.operator, [newRow(name)]);
+			const row = await customer(tenant.admin, name);
+			const update = (value: string) => tenant.operator.from("customers").update({ [field]: value } as { email: string }).eq("id", row.id);
+
+			expect((await update(bad)).error?.code).toBe("22023");
+			expect((await update(good)).error).toBeNull();
+			expect((await customer(tenant.admin, name))[field]).toBe(canonical);
+			expect((await update(`${canonical} `)).error).toBeNull();
+			expect((await customer(tenant.admin, name))[field]).toBe(canonical);
+			expect((await update("")).error).toBeNull();
+			expect((await customer(tenant.admin, name))[field]).toBeNull();
+		});
+
 		it("direct table writes can't skip the formats: rejected, stored canonical, legacy values stay", async () =>
 		{
 			const direct = () => tenant.operator.from("customers");
@@ -208,6 +271,18 @@ describe("customers: save_customers(), formats, deactivation, capture search", (
 			expect(dup.error?.code).toBe("23505");
 			expect(dup.error?.message).toContain("Ya existe");
 		});
+
+		it("renames a full 1000-row batch within the statement timeout", async () =>
+		{
+			const names = Array.from({ length: 1000 }, (_, i) => `${unique("Ciclo")} cliente ${i}`);
+			await saveCustomersRpc(tenant.operator, names.map((name) => newRow(name)));
+			const { data: rows } = await tenant.admin.from("customers").select("*").like("name", "Ciclo %").limit(1000);
+			const edits = rows!.map((r, i) => ({ ...newRow(r.name), id: r.id, updated_at: r.updated_at, name: rows![(i + 1) % rows!.length].name }));
+
+			const { data, error } = await saveCustomersRpc(tenant.operator, edits);
+			expect(error).toBeNull();
+			expect(data!.saved).toBe(1000);
+		}, 30_000);
 
 		it("saves a full 1000-row batch within the statement timeout, caps at 1000", async () =>
 		{

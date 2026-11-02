@@ -1,12 +1,16 @@
--- Two cleanups on the catalog save paths (TODOS.md):
+-- Cleanups on the catalog save paths (TODOS.md):
 -- 1. Swapping names (A→B + B→A) in one grid save no longer fails.
 -- 2. Customer formats hold on direct PostgREST writes too, not only in
 --    save_customers().
+-- 3. The duplicate check no longer times out on big batches or catalogs.
+-- 4. A stale row is always a conflict, never a validation error on a value
+--    the user didn't touch.
+-- 5. The same id twice in one save is rejected (last write used to win while
+--    reporting both as saved).
 
 -- ============================================================
--- Name swaps: save_products() / save_customers()
+-- save_products() / save_customers()
 -- ============================================================
--- Recreated unchanged except for the "give up their name" update.
 create or replace function public.save_products(p_rows jsonb)
 returns jsonb
 language plpgsql
@@ -43,6 +47,15 @@ begin
 
   if jsonb_array_length(p_rows) > 1000 then
     raise exception 'Máximo 1000 productos por guardado.' using errcode = '22023';
+  end if;
+
+  if exists (
+    select 1 from jsonb_array_elements(p_rows) r
+    where nullif(r->>'id', '') is not null
+    group by r->>'id'
+    having count(*) > 1
+  ) then
+    raise exception 'Un producto aparece dos veces en el guardado.' using errcode = '22023';
   end if;
 
   -- Lock every edited row up front in id order: locking in grid order let
@@ -100,12 +113,9 @@ begin
         raise exception 'Producto no encontrado.' using errcode = 'P0002';
       end if;
 
-      if (v_price is null and v_current.price_per_unit is not null)
-        or (v_unit is null and v_current.unit is not null) then
-        raise exception 'Falta el precio o la unidad de "%".', v_name using errcode = '22004';
-      end if;
-
       -- 2. Conflict check: someone saved this row after the grid loaded it.
+      -- First, and the row skips validation: the checks below compare against
+      -- the newer version, which this grid never saw.
       if v_current.updated_at is distinct from nullif(v_row->>'updated_at', '')::timestamptz then
         v_conflicts := v_conflicts || jsonb_build_object(
           'id', v_current.id,
@@ -116,6 +126,12 @@ begin
           'updated_at', v_current.updated_at,
           'updated_by_name', (select u.name from public.users u where u.id = v_current.updated_by)
         );
+        continue;
+      end if;
+
+      if (v_price is null and v_current.price_per_unit is not null)
+        or (v_unit is null and v_current.unit is not null) then
+        raise exception 'Falta el precio o la unidad de "%".', v_name using errcode = '22004';
       end if;
     end if;
   end loop;
@@ -126,9 +142,9 @@ begin
 
   -- 3. Readable duplicate check (the unique index stays the real guard):
   -- within the batch, and against catalog rows the batch doesn't touch.
-  -- Normalize each row once and group — a per-row correlated count was
-  -- O(n²) and blew the 8s statement timeout at 1000 rows.
-  with batch as (
+  -- Set-based: per-row correlated lookups blew the 8s statement timeout at
+  -- 1000 rows, first in the batch and then against the catalog.
+  with batch as materialized (
     select btrim(r->>'name') as name,
       public.normalize_name(r->>'name') as norm,
       nullif(r->>'id', '')::uuid as id
@@ -136,18 +152,18 @@ begin
   ),
   repeated as (
     select norm from batch group by norm having count(*) > 1
+  ),
+  taken as (
+    select public.normalize_name(p.name) as norm
+    from public.products p
+    where p.tenant_id = v_tenant_id
+      and p.id not in (select id from batch where id is not null)
   )
   select string_agg(distinct b.name, ', ')
   into v_dupes
   from batch b
   where b.norm in (select norm from repeated)
-    or exists (
-      select 1 from public.products p
-      where p.tenant_id = v_tenant_id
-        and public.normalize_name(p.name) = b.norm
-        and p.id is distinct from b.id
-        and not exists (select 1 from batch b2 where b2.id = p.id)
-    );
+    or b.norm in (select norm from taken);
 
   if v_dupes is not null then
     raise exception 'Ya existe: %', v_dupes using errcode = '23505';
@@ -156,9 +172,10 @@ begin
   -- 4. Write. updated_by/updated_at come from triggers.
   begin
     -- Renamed rows give up their name first: the unique index is checked row
-    -- by row, so A→B + B→A would otherwise fail on a valid batch.
+    -- by row, so A→B + B→A would otherwise fail on a valid batch. Random, not
+    -- derived from the row: a predictable value could be taken by another row.
     update public.products p
-    set name = p.id::text
+    set name = gen_random_uuid()::text
     from jsonb_array_elements(p_rows) r
     where p.id = nullif(r->>'id', '')::uuid
       and p.tenant_id = v_tenant_id
@@ -230,6 +247,15 @@ begin
     raise exception 'Máximo 1000 clientes por guardado.' using errcode = '22023';
   end if;
 
+  if exists (
+    select 1 from jsonb_array_elements(p_rows) r
+    where nullif(r->>'id', '') is not null
+    group by r->>'id'
+    having count(*) > 1
+  ) then
+    raise exception 'Un cliente aparece dos veces en el guardado.' using errcode = '22023';
+  end if;
+
   -- Lock every edited row up front in id order (no deadlock between two
   -- concurrent saves whose grids list the rows in different orders).
   perform 1
@@ -265,6 +291,8 @@ begin
         raise exception 'Cliente no encontrado.' using errcode = 'P0002';
       end if;
 
+      -- The row skips validation: the checks below compare against the newer
+      -- version, which this grid never saw.
       if v_current.updated_at is distinct from nullif(v_row->>'updated_at', '')::timestamptz then
         v_conflicts := v_conflicts || jsonb_build_object(
           'id', v_current.id,
@@ -281,6 +309,7 @@ begin
           'updated_at', v_current.updated_at,
           'updated_by_name', (select u.name from public.users u where u.id = v_current.updated_by)
         );
+        continue;
       end if;
     end if;
 
@@ -333,7 +362,7 @@ begin
   end if;
 
   -- 2. Readable duplicate check (the unique index stays the real guard).
-  with batch as (
+  with batch as materialized (
     select btrim(r->>'name') as name,
       public.normalize_name(r->>'name') as norm,
       nullif(r->>'id', '')::uuid as id
@@ -341,18 +370,18 @@ begin
   ),
   repeated as (
     select norm from batch group by norm having count(*) > 1
+  ),
+  taken as (
+    select public.normalize_name(c.name) as norm
+    from public.customers c
+    where c.tenant_id = v_tenant_id
+      and c.id not in (select id from batch where id is not null)
   )
   select string_agg(distinct b.name, ', ')
   into v_dupes
   from batch b
   where b.norm in (select norm from repeated)
-    or exists (
-      select 1 from public.customers c
-      where c.tenant_id = v_tenant_id
-        and public.normalize_name(c.name) = b.norm
-        and c.id is distinct from b.id
-        and not exists (select 1 from batch b2 where b2.id = c.id)
-    );
+    or b.norm in (select norm from taken);
 
   if v_dupes is not null then
     raise exception 'Ya existe: %', v_dupes using errcode = '23505';
@@ -362,7 +391,7 @@ begin
   begin
     -- Renamed rows give up their name first (see save_products()).
     update public.customers c
-    set name = c.id::text
+    set name = gen_random_uuid()::text
     from jsonb_array_elements(v_rows) r
     where c.id = nullif(r->>'id', '')::uuid
       and c.tenant_id = v_tenant_id
@@ -424,8 +453,9 @@ $$;
 -- security invoker RPCs write with the caller's own privileges.
 --
 -- Same rule as save_customers(): only values that changed (compared trimmed)
--- are checked, and they're stored canonical. API roles only, so scripts and
--- migrations can still load data as is.
+-- are checked, and they're stored canonical; a change in padding alone keeps
+-- the stored value. API roles only, so scripts and migrations can still load
+-- data as is.
 create or replace function public.check_customer_formats()
 returns trigger
 language plpgsql
@@ -444,6 +474,8 @@ begin
     if v_value is not null and new.tax_id is null then
       raise exception 'El NIT o DUI de "%" no es válido.', new.name using errcode = '22023';
     end if;
+  else
+    new.tax_id := old.tax_id;
   end if;
 
   if btrim(new.nrc) is distinct from btrim(old.nrc) then
@@ -452,6 +484,8 @@ begin
     if v_value is not null and new.nrc is null then
       raise exception 'El NRC de "%" no es válido.', new.name using errcode = '22023';
     end if;
+  else
+    new.nrc := old.nrc;
   end if;
 
   if btrim(new.email) is distinct from btrim(old.email) then
@@ -459,6 +493,8 @@ begin
     if new.email !~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' then
       raise exception 'El correo de "%" no es válido.', new.name using errcode = '22023';
     end if;
+  else
+    new.email := old.email;
   end if;
 
   if btrim(new.cod_actividad) is distinct from btrim(old.cod_actividad) then
@@ -466,6 +502,8 @@ begin
     if new.cod_actividad !~ '^[0-9]{5,6}$' then
       raise exception 'El código de actividad de "%" no es válido (5 o 6 dígitos).', new.name using errcode = '22023';
     end if;
+  else
+    new.cod_actividad := old.cod_actividad;
   end if;
 
   return new;

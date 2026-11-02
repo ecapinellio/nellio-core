@@ -351,9 +351,64 @@ renamed rows before writing, so A→B + B→A saves in one go.
 activity code on direct writes too, and stores them canonical. Only changed
 values, for API roles, so legacy rows ("NIT pendiente") stay editable — which
 is why it's not a `CHECK ... NOT VALID` (re-validates on every update); revoking
-direct writes isn't possible while the RPCs are security invoker. Products was
-already covered by table CHECKs. A direct write still skips the concurrent-edit
-check: that's UX for the grid, not a security rule.
+direct writes isn't possible while the RPCs are security invoker. Products'
+price and unit were already covered by table CHECKs. A direct write still skips
+the concurrent-edit check: that's UX for the grid, not a security rule.
+
+### Direct writes still skip name and length limits
+
+**What:** Non-blank name and the length limits (name, phone, address, fiscal
+text) live only in `save_customers()` / `save_products()`; a direct PostgREST
+write can store a blank name or a 200,000-character phone. Products' price also
+rounds silently to 2 decimals there. Fix: table CHECKs (`NOT VALID` is fine for
+these, they don't depend on "changed").
+
+**Why:** Not reachable from the app; defense in depth. Found by `/review`
+(2026-11-02).
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Nothing.
+
+### Legacy fiscal values with tabs/newlines block a customer's save
+
+**What:** The grid trims with JS `.trim()` (all whitespace), `save_customers()`
+with `btrim()` (spaces only). A legacy `tax_id` ending in a newline reads as
+changed, fails the format check, and blocks the whole batch. Fix: strip the same
+set on both sides.
+
+**Why:** Found by `/review` (2026-11-02). Only matters if such data exists.
+
+**Effort:** S
+**Priority:** P2 — check first, on prod:
+`select id from customers where tax_id ~ '^\s|\s$' or nrc ~ '^\s|\s$' or email ~ '^\s|\s$' or cod_actividad ~ '^\s|\s$'`
+**Depends on:** That query.
+
+### The grid can rewrite a legacy note in the NIT column
+
+**What:** `lib/customers/grid.ts` sends `normalizeTaxId()` for every field of a
+dirty row, so a legacy note with 9 or 14 digits in `tax_id` ("Tel 7777-8888 x1")
+may be rewritten as a NIT on an unrelated phone edit. Seen in SQL; the grid path
+was read, not run. Same family as the two rules above: `normalize_tax_id()`
+ignores non-digit text.
+
+**Why:** Silent data change. Only if ECTEC's data has notes in that column.
+
+**Effort:** S
+**Priority:** P2
+**Depends on:** Checking ECTEC's `tax_id` values in prod.
+
+### Upserts on a legacy customer fail the format trigger
+
+**What:** `insert ... on conflict do update` with an unchanged legacy value is
+rejected: the BEFORE INSERT phase has no old row to compare with.
+
+**Why:** Nothing upserts customers today. Matters only if a script or import
+starts to, and scripts using `service_role` skip the trigger anyway.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Nothing.
 
 ### ~~Dedicated product catalog page (candidate slice 6)~~ — DONE
 

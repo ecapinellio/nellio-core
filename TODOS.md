@@ -380,9 +380,9 @@ set on both sides.
 **Why:** Found by `/review` (2026-11-02). Only matters if such data exists.
 
 **Effort:** S
-**Priority:** P2 — check first, on prod:
-`select id from customers where tax_id ~ '^\s|\s$' or nrc ~ '^\s|\s$' or email ~ '^\s|\s$' or cod_actividad ~ '^\s|\s$'`
-**Depends on:** That query.
+**Priority:** P3 — checked on prod 2026-11-02: no such rows. New data can't get
+there through the API; only a `service_role` import could.
+**Depends on:** Nothing.
 
 ### The grid can rewrite a legacy note in the NIT column
 
@@ -395,8 +395,8 @@ ignores non-digit text.
 **Why:** Silent data change. Only if ECTEC's data has notes in that column.
 
 **Effort:** S
-**Priority:** P2
-**Depends on:** Checking ECTEC's `tax_id` values in prod.
+**Priority:** P3 — checked on prod 2026-11-02: every `tax_id` is canonical.
+**Depends on:** Nothing.
 
 ### Upserts on a legacy customer fail the format trigger
 

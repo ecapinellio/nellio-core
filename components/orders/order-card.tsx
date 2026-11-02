@@ -27,7 +27,7 @@ interface OrderCardProps
 	 * subsequent click after a real (non-synthetic) pointerdown/up pair.
 	 */
 	dragHandleProps?: ButtonHTMLAttributes<HTMLButtonElement>;
-	/** Replaces the Confirmar slot; the phone board's next-step and "Mover a…" buttons. */
+	/** Footer controls next to the timestamp: the phone board's next-step and "Mover a…" buttons. */
 	actions?: ReactNode;
 }
 
@@ -83,7 +83,10 @@ export const OrderCard = forwardRef<HTMLDivElement, OrderCardProps>(function Ord
 					: null}
 			</div>
 
-			<p className="truncate text-sm font-semibold">{order.customerName}</p>
+			{/* A real button so the keyboard reaches the detail; the click bubbles to the root's onOpenDetail. */}
+			{onOpenDetail
+				? <button type="button" className="truncate text-left text-sm font-semibold">{order.customerName}</button>
+				: <p className="truncate text-sm font-semibold">{order.customerName}</p>}
 
 			{order.items.length > 0
 				? (

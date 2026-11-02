@@ -27,6 +27,7 @@ const EMPTY_MESSAGES: Record<OrderStatus, string> = {
 interface UndoState
 {
 	orderId: string;
+	customerName: string;
 	from: OrderStatus;
 	to: OrderStatus;
 }
@@ -34,6 +35,8 @@ interface UndoState
 interface OrdersMobileBoardProps
 {
 	groups: Record<OrderStatus, KanbanOrder[]>;
+	/** Shown in the fixed bar: an error above the board is out of view once the list scrolls. */
+	error: string | null;
 	/** Resolves to false if the move failed (the board shows the error). */
 	onMove: (orderId: string, status: OrderStatus) => Promise<boolean>;
 	onOpenDetail: (orderId: string) => void;
@@ -45,12 +48,16 @@ interface OrdersMobileBoardProps
  * dragging, which fights the list's scroll. "Mover a…" still reaches any
  * status, same as the desktop board (eng-review Decision 4).
  */
-export function OrdersMobileBoard({ groups, onMove, onOpenDetail }: OrdersMobileBoardProps)
+export function OrdersMobileBoard({ groups, error, onMove, onOpenDetail }: OrdersMobileBoardProps)
 {
 	const [activeStatus, setActiveStatus] = useState<OrderStatus>("pending");
-	const [menuOrder, setMenuOrder] = useState<KanbanOrder | null>(null);
+	// The id, not the order: the status it shows must follow the board. Kept
+	// after closing so the sheet doesn't blank while it animates out.
+	const [menuOrderId, setMenuOrderId] = useState<string | null>(null);
+	const [menuOpen, setMenuOpen] = useState(false);
 	const [undo, setUndo] = useState<UndoState | null>(null);
 	const moveLocked = useRef(false);
+	const boardRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() =>
 	{
@@ -62,7 +69,11 @@ export function OrdersMobileBoard({ groups, onMove, onOpenDetail }: OrdersMobile
 		return () => clearTimeout(timer);
 	}, [undo]);
 
-	async function moveWithUndo(order: KanbanOrder, to: OrderStatus)
+	const findOrder = (orderId: string | null) =>
+		ORDER_STATUSES.flatMap((status) => groups[status]).find((order) => order.id === orderId) ?? null;
+
+	/** For controls that leave something else under the thumb when they act. */
+	function guardDoubleTap(action: () => void)
 	{
 		if (moveLocked.current)
 		{
@@ -73,11 +84,16 @@ export function OrdersMobileBoard({ groups, onMove, onOpenDetail }: OrdersMobile
 		{
 			moveLocked.current = false;
 		}, DOUBLE_TAP_MS);
+		action();
+	}
 
+	async function moveWithUndo(order: KanbanOrder, to: OrderStatus)
+	{
 		const from = order.status as OrderStatus;
+		setUndo(null);
 		if (from !== to && await onMove(order.id, to))
 		{
-			setUndo({ orderId: order.id, from, to });
+			setUndo({ orderId: order.id, customerName: order.customerName, from, to });
 		}
 	}
 
@@ -90,10 +106,21 @@ export function OrdersMobileBoard({ groups, onMove, onOpenDetail }: OrdersMobile
 		}
 	}
 
+	function selectTab(status: OrderStatus)
+	{
+		setActiveStatus(status);
+		const board = boardRef.current;
+		if (board && board.getBoundingClientRect().top < 0)
+		{
+			board.scrollIntoView();
+		}
+	}
+
 	const orders = groups[activeStatus];
+	const menuOrder = findOrder(menuOrderId);
 
 	return (
-		<div className={cn("flex flex-col gap-3", undo ? "pb-20" : null)}>
+		<div ref={boardRef} className={cn("flex flex-col gap-3", undo || error ? "pb-20" : null)}>
 			<div role="group" aria-label="Filtrar por estado" className="sticky top-0 z-10 grid grid-cols-4 border-b border-border bg-background">
 				{ORDER_STATUSES.map((status) =>
 				{
@@ -104,10 +131,10 @@ export function OrdersMobileBoard({ groups, onMove, onOpenDetail }: OrdersMobile
 							type="button"
 							aria-pressed={active}
 							aria-label={`${ORDER_STATUS_LABELS[status]}, ${groups[status].length} ${groups[status].length === 1 ? "pedido" : "pedidos"}`}
-							onClick={() => setActiveStatus(status)}
+							onClick={() => selectTab(status)}
 							style={active ? { borderColor: `var(--status-${status})` } : undefined}
 							className={cn(
-								"flex min-h-13 flex-col items-center justify-center border-b-2 border-transparent py-1",
+								"flex min-h-13 flex-col items-center justify-center border-b-2 border-transparent py-1 active:bg-muted",
 								active ? "text-foreground" : "text-muted-foreground",
 							)}
 						>
@@ -143,12 +170,24 @@ export function OrdersMobileBoard({ groups, onMove, onOpenDetail }: OrdersMobile
 										variant="outline"
 										className="size-11"
 										aria-label={`Mover a otro estado: ${order.customerName}`}
-										onClick={() => setMenuOrder(order)}
+										onClick={() =>
+										{
+											setMenuOrderId(order.id);
+											setMenuOpen(true);
+										}}
 									>
 										<MoreHorizontal className="size-5" />
 									</Button>
 									{next
-										? <Button className="h-11 px-4" onClick={() => moveWithUndo(order, next.status)}>{next.label}</Button>
+										? (
+											<Button
+												className="h-11 px-4"
+												aria-label={`${next.label}: ${order.customerName}`}
+												onClick={() => guardDoubleTap(() => moveWithUndo(order, next.status))}
+											>
+												{next.label}
+											</Button>
+										)
 										: null}
 								</div>
 							)}
@@ -164,7 +203,7 @@ export function OrdersMobileBoard({ groups, onMove, onOpenDetail }: OrdersMobile
 				)
 				: null}
 
-			<Sheet open={menuOrder !== null} onOpenChange={(open) => !open && setMenuOrder(null)}>
+			<Sheet open={menuOpen} onOpenChange={setMenuOpen}>
 				<SheetContent side="bottom">
 					<SheetHeader>
 						<SheetTitle>Mover a…</SheetTitle>
@@ -182,9 +221,9 @@ export function OrdersMobileBoard({ groups, onMove, onOpenDetail }: OrdersMobile
 									{
 										moveWithUndo(menuOrder, status);
 									}
-									setMenuOrder(null);
+									setMenuOpen(false);
 								}}
-								className="flex min-h-12 items-center justify-between gap-2 border-b border-border last:border-b-0 disabled:opacity-60"
+								className="flex min-h-12 items-center justify-between gap-2 border-b border-border last:border-b-0 active:bg-muted"
 							>
 								<OrderStatusBadge status={status} />
 								{status === menuOrder?.status
@@ -197,11 +236,18 @@ export function OrdersMobileBoard({ groups, onMove, onOpenDetail }: OrdersMobile
 			</Sheet>
 
 			<div aria-live="polite">
-				{undo
+				{error
+					? (
+						<p role="alert" className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-40 rounded-md border border-destructive bg-background px-4 py-3 text-sm text-destructive shadow-md">
+							{error}
+						</p>
+					)
+					: null}
+				{undo && !error
 					? (
 						<div className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-40 flex items-center justify-between gap-2 rounded-md bg-foreground py-1 pl-4 pr-1 text-sm text-background shadow-md">
-							<span className="truncate">Movido a {ORDER_STATUS_LABELS[undo.to]}</span>
-							<button type="button" onClick={undoMove} className="min-h-11 shrink-0 px-3 font-semibold underline underline-offset-4">
+							<span className="truncate">{undo.customerName} → {ORDER_STATUS_LABELS[undo.to]}</span>
+							<button type="button" onClick={() => guardDoubleTap(undoMove)} className="min-h-11 shrink-0 px-3 font-semibold underline underline-offset-4">
 								Deshacer
 							</button>
 						</div>

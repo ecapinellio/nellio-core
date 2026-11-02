@@ -96,4 +96,19 @@ describe("listOrdersForKanban() / updateOrderStatus()", () =>
 		expect(error).toBeNull();
 		expect(operatorAttempt?.status).toBe("confirmed");
 	});
+
+	it("updateOrderStatus() with an expected status won't overwrite a move the board hasn't seen", async () =>
+	{
+		const orderId = await freshOrder("pending");
+		await updateOrderStatus(tenant.admin, orderId, "delivered");
+
+		const { error } = await updateOrderStatus(tenant.operator, orderId, "confirmed", "pending");
+		expect(error?.code).toBe("PGRST116");
+
+		const { data: row } = await tenant.admin.from("orders").select("status").eq("id", orderId).single();
+		expect(row?.status).toBe("delivered");
+
+		const { error: fresh } = await updateOrderStatus(tenant.operator, orderId, "confirmed", "delivered");
+		expect(fresh).toBeNull();
+	});
 });

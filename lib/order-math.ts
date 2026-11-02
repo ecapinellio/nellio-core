@@ -42,6 +42,16 @@ export function nextStatusAction(status: OrderStatus): { status: OrderStatus; la
 	return NEXT_STATUS_ACTIONS[status] ?? null;
 }
 
+/** A list fetched while moves are in flight may predate them; keep the moves. */
+export function applyPendingMoves<T extends { id: string; status: string }>(orders: T[], pending: ReadonlyMap<string, OrderStatus>): T[]
+{
+	return orders.map((order) =>
+	{
+		const status = pending.get(order.id);
+		return status ? { ...order, status } : order;
+	});
+}
+
 export function isOrderStatus(status: string): status is OrderStatus
 {
 	return (ORDER_STATUSES as readonly string[]).includes(status);

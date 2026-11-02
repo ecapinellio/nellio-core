@@ -57,6 +57,34 @@ doesn't automatically mean good touch ergonomics.
 
 
 
+### Phone orders board: focus, undo timing, hidden desktop board
+
+**What:** After a move the focused button leaves the DOM, so focus falls to the
+page top; the 6s undo doesn't pause for screen reader or keyboard users; moves
+are only announced through the bar. Separately, phones still mount the hidden
+desktop board (one `useSortable` per order); render one board via `matchMedia`
+if the order count ever makes phones slow.
+
+**Why:** Found by `/review` (2026-11-02). Today's users are on touch with few
+active orders, so neither hurts yet.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Nothing.
+
+### Board doesn't live-update
+
+**What:** `/orders` loads once. Moves from a stale screen are now rejected with
+"Este pedido cambió" (expected-status check in `updateOrderStatus()`), but the
+board still shows old data until then. Realtime, or refetch on tab focus.
+
+**Why:** Two people working the board see different counts. Found by `/review`
+(2026-11-02).
+
+**Effort:** S
+**Priority:** P2
+**Depends on:** Nothing.
+
 ### Role-differentiated permissions for order-detail price overrides
 
 **What:** Restrict editing `order_items.price_at_order` (the "edit price" flow

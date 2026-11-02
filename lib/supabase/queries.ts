@@ -396,14 +396,22 @@ export async function listOrdersForKanban(supabase: Client): Promise<QueryResult
  * there's no multi-table write here that would need create_order()'s
  * atomicity guarantees.
  */
-export async function updateOrderStatus(supabase: Client, orderId: string, status: OrderStatus): Promise<QueryResult<Order>>
+export async function updateOrderStatus(
+	supabase: Client,
+	orderId: string,
+	status: OrderStatus,
+	expectedStatus?: string,
+): Promise<QueryResult<Order>>
 {
-	const { data, error } = await supabase
-		.from("orders")
-		.update({ status })
-		.eq("id", orderId)
-		.select()
-		.single();
+	let query = supabase.from("orders").update({ status }).eq("id", orderId);
+	// Any → any stays allowed (Decision 4), but only from the status the user
+	// saw: the board doesn't live-update, so one tap on a stale card would
+	// otherwise undo a colleague's move. A mismatch is PGRST116, like RLS.
+	if (expectedStatus !== undefined)
+	{
+		query = query.eq("status", expectedStatus);
+	}
+	const { data, error } = await query.select().single();
 	return { data, error };
 }
 

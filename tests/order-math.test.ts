@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateLineTotal, calculateOrderTotal, groupOrdersByStatus, nextStatusAction } from "@/lib/order-math";
+import { calculateLineTotal, calculateOrderTotal, applyPendingMoves, groupOrdersByStatus, nextStatusAction } from "@/lib/order-math";
 
 describe("calculateLineTotal", () =>
 {
@@ -71,6 +71,19 @@ describe("nextStatusAction", () =>
 		expect(nextStatusAction("confirmed")).toEqual({ status: "dispatched", label: "Despachar" });
 		expect(nextStatusAction("dispatched")).toEqual({ status: "delivered", label: "Entregar" });
 		expect(nextStatusAction("delivered")).toBeNull();
+	});
+});
+
+describe("applyPendingMoves", () =>
+{
+	it("keeps in-flight moves over a list fetched before they landed", () =>
+	{
+		const fetched = [{ id: "a", status: "pending" }, { id: "b", status: "pending" }];
+		expect(applyPendingMoves(fetched, new Map([["a", "confirmed" as const]]))).toEqual([
+			{ id: "a", status: "confirmed" },
+			{ id: "b", status: "pending" },
+		]);
+		expect(applyPendingMoves(fetched, new Map())).toEqual(fetched);
 	});
 });
 

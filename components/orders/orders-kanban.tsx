@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	DndContext,
 	DragOverlay,
@@ -16,7 +16,7 @@ import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalList
 import { CSS } from "@dnd-kit/utilities";
 import { createClient } from "@/lib/supabase/client";
 import { listOrdersForKanban, updateOrderStatus, type KanbanOrder } from "@/lib/supabase/queries";
-import { ORDER_STATUSES, groupOrdersByStatus, isOrderStatus, type OrderStatus } from "@/lib/order-math";
+import { ORDER_STATUSES, applyPendingMoves, groupOrdersByStatus, isOrderStatus, type OrderStatus } from "@/lib/order-math";
 import { KanbanColumn } from "@/components/orders/kanban-column";
 import { OrderCard } from "@/components/orders/order-card";
 import { OrderDetailDialog } from "@/components/orders/order-detail-dialog";
@@ -119,6 +119,9 @@ export function OrdersKanban({ onOrderChanged }: OrdersKanbanProps)
 	const [actionError, setActionError] = useState<string | null>(null);
 	const [activeId, setActiveId] = useState<string | null>(null);
 	const [openOrderId, setOpenOrderId] = useState<string | null>(null);
+	const pendingMoves = useRef(new Map<string, OrderStatus>());
+	// Bumped when a move starts or lands: a refetch that spans one re-reads.
+	const movesVersion = useRef(0);
 
 	useEffect(() =>
 	{
@@ -153,24 +156,38 @@ export function OrdersKanban({ onOrderChanged }: OrdersKanbanProps)
 	/** Post-save refetch (eng-review Decision 6) — a full re-fetch, not an in-memory patch, since this is a deliberate low-frequency action, not a frequent drag. */
 	async function refetchOrders()
 	{
-		const { data, error } = await listOrdersForKanban(supabase);
-		if (error)
+		let version;
+		let result;
+		do
+		{
+			version = movesVersion.current;
+			result = await listOrdersForKanban(supabase);
+		}
+		while (version !== movesVersion.current);
+
+		if (result.error || !result.data)
 		{
 			setActionError("No se pudieron actualizar los pedidos. Refrescá la página.");
 			return;
 		}
-		setOrders(data);
+		setOrders(applyPendingMoves(result.data, pendingMoves.current));
 	}
 
 	// Optimistic update, reverted on error (failure mode: network error
 	// mid-drag) — the operator sees the move happen immediately, not after
 	// a round trip, since that's the whole point of drag-and-drop.
 	// Functional updates, and the revert touches this order only: on a phone
-	// two quick moves can overlap, and restoring a snapshot would undo the other.
+	// two quick moves can overlap, and restoring a snapshot would undo the
+	// other. One write per order at a time, so they can't land out of order.
 	async function moveOrder(orderId: string, newStatus: OrderStatus): Promise<boolean>
 	{
 		const current = orders?.find((order) => order.id === orderId);
-		if (!current || current.status === newStatus)
+		if (!current)
+		{
+			setActionError("Ese pedido ya no está en el tablero.");
+			return false;
+		}
+		if (current.status === newStatus || pendingMoves.current.has(orderId))
 		{
 			return false;
 		}
@@ -180,12 +197,20 @@ export function OrdersKanban({ onOrderChanged }: OrdersKanbanProps)
 
 		setActionError(null);
 		setStatus(newStatus);
+		pendingMoves.current.set(orderId, newStatus);
+		movesVersion.current++;
 
-		const { error } = await updateOrderStatus(supabase, orderId, newStatus);
+		const { error } = await updateOrderStatus(supabase, orderId, newStatus, current.status);
+		pendingMoves.current.delete(orderId);
+		movesVersion.current++;
+
 		if (error)
 		{
 			setStatus(current.status);
-			setActionError("No se pudo actualizar el pedido. Intenta de nuevo.");
+			setActionError(error.code === "PGRST116"
+				? "Este pedido cambió mientras tenías la pantalla abierta. Revisa su estado actual."
+				: "No se pudo actualizar el pedido. Intenta de nuevo.");
+			refetchOrders();
 			return false;
 		}
 		onOrderChanged?.();
@@ -224,10 +249,10 @@ export function OrdersKanban({ onOrderChanged }: OrdersKanbanProps)
 
 	return (
 		<div className="flex flex-col gap-3">
-			{actionError ? <p className="text-sm text-destructive">{actionError}</p> : null}
+			{actionError ? <p className="hidden text-sm text-destructive md:block">{actionError}</p> : null}
 
 			<div className="md:hidden">
-				<OrdersMobileBoard groups={groups} onMove={moveOrder} onOpenDetail={setOpenOrderId} />
+				<OrdersMobileBoard groups={groups} error={actionError} onMove={moveOrder} onOpenDetail={setOpenOrderId} />
 			</div>
 
 			<div className="hidden md:block">

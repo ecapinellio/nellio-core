@@ -7,16 +7,15 @@ import { normalizeTaxId } from "@/lib/customers/parse";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { FormPanel, FormPanelFooter } from "@/components/form-panel";
+import { SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { FormPanel, FormPanelFooter, FormPanelHeader } from "@/components/form-panel";
 import { FiscalFields, firstFiscalError } from "@/components/customers/fiscal-fields";
 
 /**
  * Phone editing (customers design D8): one sheet with "Contacto" and
- * "Datos fiscales" and its own Guardar — no panel stacked on a sheet.
- * In the shared FormPanel, like every form.
+ * "Datos fiscales" and its own Guardar — nothing stacked on top of it.
  */
-export function CustomerEditSheet({
+export function CustomerEditPanel({
 	row,
 	allRows,
 	duplicate,
@@ -80,10 +79,10 @@ function EditForm({
 
 	return (
 		<form onSubmit={submit} noValidate className="flex min-h-full flex-col">
-			<SheetHeader>
+			<FormPanelHeader>
 				<SheetTitle>{row.original ? "Editar cliente" : "Agregar cliente"}</SheetTitle>
 				<SheetDescription className="sr-only">Contacto y datos fiscales del cliente.</SheetDescription>
-			</SheetHeader>
+			</FormPanelHeader>
 			<div className="flex flex-col gap-6 px-4">
 				<section className="flex flex-col gap-4" aria-labelledby="contact-title">
 					<h3 id="contact-title" className="text-sm font-semibold">Contacto</h3>

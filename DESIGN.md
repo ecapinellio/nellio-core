@@ -17,7 +17,7 @@
 - **shadcn/ui sobre Radix UI primitives + Tailwind CSS v4.** No son alternativas: shadcn/ui es Radix + estilos Tailwind + componentes copiados al repo (sin dependencia opaca). Ya hay Tailwind v4 instalado — cero fricción de adopción.
 - `Command`/`Combobox` para búsqueda-con-quick-add de clientes/productos.
 - **Dos contenedores, una regla:**
-  - **Panel (`components/form-panel.tsx`)** para todo lo que se llena o se lee con calma: agregar usuario, detalle de pedido, editar producto/cliente, datos fiscales. Desde la derecha en escritorio (560px, la lista queda a la vista), desde abajo en celular (hasta 90% de alto, al alcance del pulgar). Guardar fijo abajo.
+  - **Panel (`components/form-panel.tsx`)** para todo lo que se llena o se lee con calma: agregar usuario, detalle de pedido, editar producto/cliente, datos fiscales. Desde la derecha en escritorio (560px, la lista se sigue viendo detrás), desde abajo en celular (hasta 90% de alto, al alcance del pulgar). Título y X (44px en celular) fijos arriba, botones fijos abajo (en celular la acción principal va primero). Al abrir, el foco va al primer campo en escritorio; en celular no, para que el teclado no tape el panel.
   - **`Dialog` centrado** solo para decisiones cortas que bloquean: pedido duplicado (no un banner pasivo), conflicto de edición, desactivar usuario, cambios sin guardar, contraseña de una sola vez. Interrumpe a propósito.
   - Menús aparte: "Mover a…" (hoja inferior) y el menú ☰ (izquierda).
 

@@ -9,8 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { FormPanel, FormPanelFooter } from "@/components/form-panel";
+import { SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { FormPanel, FormPanelFooter, FormPanelHeader } from "@/components/form-panel";
 
 const GENERIC_ERROR = "No se pudo crear el usuario. Intenta de nuevo.";
 
@@ -20,7 +20,7 @@ const GENERIC_ERROR = "No se pudo crear el usuario. Intenta de nuevo.";
  * and hands the credentials up — the shared OneTimePasswordDialog shows
  * them, same as for restore/reactivate.
  */
-export function CreateUserDialog({ onCreated }: { onCreated: (credentials: Credentials) => void })
+export function CreateUserPanel({ onCreated }: { onCreated: (credentials: Credentials) => void })
 {
 	const [open, setOpen] = useState(false);
 	const [name, setName] = useState("");
@@ -93,61 +93,64 @@ export function CreateUserDialog({ onCreated }: { onCreated: (credentials: Crede
 	}
 
 	return (
-		<>
-			<Button onClick={() => handleOpenChange(true)}>
-				<Plus />
-				Agregar usuario
-			</Button>
-			<FormPanel open={open} onOpenChange={handleOpenChange}>
-				<SheetHeader>
-					<SheetTitle>Agregar usuario</SheetTitle>
-					<SheetDescription>Le generaremos una contraseña que verás una sola vez.</SheetDescription>
-				</SheetHeader>
+		<FormPanel
+			open={open}
+			onOpenChange={handleOpenChange}
+			trigger={(
+				<Button>
+					<Plus />
+					Agregar usuario
+				</Button>
+			)}
+		>
+			<FormPanelHeader>
+				<SheetTitle>Agregar usuario</SheetTitle>
+				<SheetDescription>Le generaremos una contraseña que verás una sola vez.</SheetDescription>
+			</FormPanelHeader>
 
-				<form id="create-user-form" onSubmit={handleSubmit} className="flex flex-col gap-4 px-4 pb-4">
-					<div className="flex flex-col gap-2">
-						<Label htmlFor="name">Nombre</Label>
-						<Input id="name" value={name} onChange={(e) => setName(e.target.value)} disabled={submitting} autoFocus />
-					</div>
+			<form id="create-user-form" onSubmit={handleSubmit} className="flex flex-col gap-4 px-4 pb-4">
+				<div className="flex flex-col gap-2">
+					<Label htmlFor="name">Nombre</Label>
+					<Input id="name" value={name} onChange={(e) => setName(e.target.value)} disabled={submitting} data-autofocus />
+				</div>
 
-					<div className="flex flex-col gap-2">
-						<Label htmlFor="email">Correo</Label>
-						<Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={submitting} />
-					</div>
+				<div className="flex flex-col gap-2">
+					<Label htmlFor="email">Correo</Label>
+					<Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={submitting} />
+				</div>
 
-					<div className="flex flex-col gap-2">
-						<Label htmlFor="role">Rol</Label>
-						<Select value={role} onValueChange={(v) => setRole(v as CreatableRole)} disabled={submitting}>
-							<SelectTrigger id="role" className="w-full">
-								<SelectValue placeholder="Elegir rol" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="operator">{ROLE_LABELS.operator}</SelectItem>
-								<SelectItem value="driver">{ROLE_LABELS.driver}</SelectItem>
-							</SelectContent>
-						</Select>
-					</div>
+				<div className="flex flex-col gap-2">
+					<Label htmlFor="role">Rol</Label>
+					<Select value={role} onValueChange={(v) => setRole(v as CreatableRole)} disabled={submitting}>
+						<SelectTrigger id="role" className="w-full">
+							<SelectValue placeholder="Elegir rol" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="operator">{ROLE_LABELS.operator}</SelectItem>
+							<SelectItem value="driver">{ROLE_LABELS.driver}</SelectItem>
+						</SelectContent>
+					</Select>
+				</div>
 
-					{error
-						? (
-							<Alert variant="destructive">
-								<AlertTriangle />
-								<AlertDescription>{error}</AlertDescription>
-							</Alert>
-						)
-						: null}
-				</form>
+				{error
+					? (
+						<Alert variant="destructive">
+							<AlertTriangle />
+							<AlertDescription>{error}</AlertDescription>
+						</Alert>
+					)
+					: null}
+			</form>
 
-				<FormPanelFooter className="sm:flex-row sm:justify-end">
-					<Button type="button" variant="secondary" className="h-11 md:h-9" onClick={() => handleOpenChange(false)} disabled={submitting}>
-						Cancelar
-					</Button>
-					<Button type="submit" form="create-user-form" className="h-11 md:h-9" disabled={submitting}>
-						{submitting ? <Loader2 className="animate-spin" /> : null}
-						{submitting ? "Creando…" : "Crear usuario"}
-					</Button>
-				</FormPanelFooter>
-			</FormPanel>
-		</>
+			<FormPanelFooter>
+				<Button type="button" variant="secondary" className="h-11 md:h-9" onClick={() => handleOpenChange(false)} disabled={submitting}>
+					Cancelar
+				</Button>
+				<Button type="submit" form="create-user-form" className="h-11 md:h-9" disabled={submitting}>
+					{submitting ? <Loader2 className="animate-spin" /> : null}
+					{submitting ? "Creando…" : "Crear usuario"}
+				</Button>
+			</FormPanelFooter>
+		</FormPanel>
 	);
 }

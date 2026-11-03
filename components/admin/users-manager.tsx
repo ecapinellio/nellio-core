@@ -25,7 +25,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import { CreateUserDialog } from "@/components/admin/create-user-dialog";
+import { CreateUserPanel } from "@/components/admin/create-user-panel";
 import { OneTimePasswordDialog } from "@/components/admin/one-time-password-dialog";
 
 type ActionKind = "reset" | "deactivate" | "reactivate";
@@ -129,7 +129,7 @@ function RowActions({
 
 /**
  * /admin/users (RBAC slice 3, design review D1–D12): the list is the page;
- * creating is a dialog; every generated password lands in the single
+ * creating is a FormPanel; every generated password lands in the single
  * OneTimePasswordDialog, held here at page level so a list refresh
  * (revalidatePath) can't unmount it mid-display.
  */
@@ -206,7 +206,7 @@ export function UsersManager({ users, currentUserId }: { users: TenantUser[]; cu
 					<h1 className="text-xl font-semibold tracking-tight">Usuarios</h1>
 					<p className="text-sm text-muted-foreground">Administra el acceso de tu equipo.</p>
 				</div>
-				<CreateUserDialog onCreated={setCredentials} />
+				<CreateUserPanel onCreated={setCredentials} />
 			</div>
 
 			{/* Desktop / tablet: table */}
@@ -275,7 +275,7 @@ export function UsersManager({ users, currentUserId }: { users: TenantUser[]; cu
 				? (
 					<div className="flex flex-col items-start gap-3 rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">
 						Todavía no agregaste a nadie de tu equipo.
-						<CreateUserDialog onCreated={setCredentials} />
+						<CreateUserPanel onCreated={setCredentials} />
 					</div>
 				)
 				: null}

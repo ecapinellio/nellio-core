@@ -21,7 +21,7 @@ import { listOrdersForKanban, updateOrderStatus, type KanbanOrder } from "@/lib/
 import { ORDER_STATUSES, applyPendingMoves, groupOrdersByStatus, isOrderStatus, type OrderStatus } from "@/lib/order-math";
 import { KanbanColumn } from "@/components/orders/kanban-column";
 import { OrderCard } from "@/components/orders/order-card";
-import { OrderDetailDialog } from "@/components/orders/order-detail-dialog";
+import { OrderDetailPanel } from "@/components/orders/order-detail-panel";
 import { OrdersMobileBoard } from "@/components/orders/orders-mobile-board";
 
 function SortableOrderCard({
@@ -361,7 +361,7 @@ export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 				</DndContext>
 			</div>
 
-			<OrderDetailDialog
+			<OrderDetailPanel
 				orderId={openOrderId}
 				onClose={() => setOpenOrderId(null)}
 				onSaved={() =>

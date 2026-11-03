@@ -15,18 +15,18 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import { SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { FormPanel, FormPanelFooter } from "@/components/form-panel";
+import { SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { FormPanel, FormPanelFooter, FormPanelHeader } from "@/components/form-panel";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-interface OrderDetailDialogProps
+interface OrderDetailPanelProps
 {
 	orderId: string | null;
 	onClose: () => void;
-	/** Called after a successful save — OrdersKanban re-fetches the board (design review Decision 3/eng-review Decision 6), this dialog doesn't patch anything itself. */
+	/** Called after a successful save — OrdersKanban re-fetches the board (design review Decision 3/eng-review Decision 6), this panel doesn't patch anything itself. */
 	onSaved: () => void;
 }
 
@@ -55,7 +55,7 @@ function toPriceInput(price: number | null): string
  * items stack below `sm`. "Cambios sin guardar" is a short decision, so it's a
  * centered Dialog on top.
  */
-export function OrderDetailDialog({ orderId, onClose, onSaved }: OrderDetailDialogProps)
+export function OrderDetailPanel({ orderId, onClose, onSaved }: OrderDetailPanelProps)
 {
 	const supabase = useMemo(() => createClient(), []);
 	const [detail, setDetail] = useState<OrderDetail | null>(null);
@@ -195,14 +195,15 @@ export function OrderDetailDialog({ orderId, onClose, onSaved }: OrderDetailDial
 
 	return (
 		<>
-			<FormPanel open={orderId !== null} onOpenChange={(open) => { if (!open) attemptClose(); }}>
+			{/* Not while saving: the save would land after the panel moved on to another order and close it. */}
+			<FormPanel open={orderId !== null} onOpenChange={(open) => { if (!open && !saving) attemptClose(); }}>
 				{showError
 					? (
 						<>
-							<SheetHeader>
+							<FormPanelHeader>
 								<SheetTitle>No se pudo cargar el pedido</SheetTitle>
 								<SheetDescription>Intenta de nuevo o cierra el panel.</SheetDescription>
-							</SheetHeader>
+							</FormPanelHeader>
 							<div className="px-4 pb-4">
 								<Alert variant="destructive">
 									<AlertTriangle />
@@ -214,16 +215,16 @@ export function OrderDetailDialog({ orderId, onClose, onSaved }: OrderDetailDial
 					: showLoading
 						? (
 							<>
-								<SheetHeader>
+								<FormPanelHeader>
 									<SheetTitle>Pedido</SheetTitle>
 									<SheetDescription className="sr-only">Cargando el pedido.</SheetDescription>
-								</SheetHeader>
+								</FormPanelHeader>
 								<p className="py-8 text-center text-sm text-muted-foreground">Cargando...</p>
 							</>
 						)
 						: detail && detail.id === orderId && (
 							<div className="flex min-h-full flex-col">
-								<SheetHeader className="pr-12">
+								<FormPanelHeader>
 									<SheetTitle>{detail.customerName}</SheetTitle>
 									<SheetDescription className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs tabular-nums">
 										<span>#{detail.id.slice(0, 8)}</span>
@@ -232,7 +233,7 @@ export function OrderDetailDialog({ orderId, onClose, onSaved }: OrderDetailDial
 										<span>{formatOrderTimestamp(detail.createdAt)}</span>
 										{detail.customerPhone ? <span>· {detail.customerPhone}</span> : null}
 									</SheetDescription>
-								</SheetHeader>
+								</FormPanelHeader>
 
 								<div className="flex flex-col gap-4 px-4 pb-4">
 									<div className="flex flex-col gap-2">
@@ -295,7 +296,7 @@ export function OrderDetailDialog({ orderId, onClose, onSaved }: OrderDetailDial
 										: null}
 								</div>
 
-								<FormPanelFooter className="sm:flex-row sm:justify-end">
+								<FormPanelFooter>
 									<Button variant="secondary" className="h-11 md:h-9" onClick={attemptClose} disabled={saving}>
 										Cancelar
 									</Button>
@@ -308,7 +309,20 @@ export function OrderDetailDialog({ orderId, onClose, onSaved }: OrderDetailDial
 			</FormPanel>
 
 			<Dialog open={confirmingDiscard} onOpenChange={(open) => { if (!open) setConfirmingDiscard(false); }}>
-				<DialogContent showCloseButton={false} className="sm:max-w-md">
+				<DialogContent
+					showCloseButton={false}
+					className="sm:max-w-md"
+					onCloseAutoFocus={(e) =>
+					{
+						// "Seguir editando": back into the panel. The prompt has no trigger to return to.
+						const notes = document.getElementById("order-detail-notes");
+						if (notes)
+						{
+							e.preventDefault();
+							notes.focus();
+						}
+					}}
+				>
 					<DialogHeader>
 						<DialogTitle>Tenés cambios sin guardar</DialogTitle>
 						<DialogDescription>Si cerrás ahora, se pierden los cambios que hiciste en este pedido.</DialogDescription>

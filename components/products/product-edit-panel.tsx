@@ -8,15 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { FormPanel, FormPanelFooter } from "@/components/form-panel";
+import { SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { FormPanel, FormPanelFooter, FormPanelHeader } from "@/components/form-panel";
 
 /**
  * Phone editing (design D11 / 8A): one product at a time, 44px controls,
  * no paste. Saves straight away — on a phone there's no grid to batch.
- * In the shared FormPanel, like every form.
  */
-export function ProductEditSheet({
+export function ProductEditPanel({
 	row,
 	duplicate,
 	saving,
@@ -74,10 +73,10 @@ function EditForm({
 
 	return (
 		<form onSubmit={submit} noValidate className="flex min-h-full flex-col">
-			<SheetHeader>
+			<FormPanelHeader>
 				<SheetTitle>{row.original ? "Editar producto" : "Agregar producto"}</SheetTitle>
 				<SheetDescription className="sr-only">Nombre, precio, unidad y estado del producto.</SheetDescription>
-			</SheetHeader>
+			</FormPanelHeader>
 			<div className="flex flex-col gap-4 px-4">
 				<Field id="edit-name" label="Nombre" error={attempted || dup ? nameError : null}>
 					<Input id="edit-name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className="h-11" />

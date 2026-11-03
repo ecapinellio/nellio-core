@@ -3,17 +3,17 @@
 import { useState } from "react";
 import { FISCAL_FIELDS, type CustomerRow } from "@/lib/customers/grid";
 import { Button } from "@/components/ui/button";
-import { SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { FormPanel, FormPanelFooter } from "@/components/form-panel";
+import { SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { FormPanel, FormPanelFooter, FormPanelHeader } from "@/components/form-panel";
 import { FiscalFields, firstFiscalError, type FiscalValues } from "@/components/customers/fiscal-fields";
 
 /**
- * Desktop side panel for the fiscal fields (customers design D3/D6). It
+ * Desktop FormPanel for the fiscal fields (customers design D3/D6). It
  * never saves on its own: "Aplicar" puts the values in the row (teal dot)
  * and the bottom bar's Guardar saves them with everything else — one save,
  * so you can't conflict with your own edit.
  */
-export function FiscalSheet({
+export function FiscalPanel({
 	row,
 	onApply,
 	onClose,
@@ -37,10 +37,10 @@ function FiscalForm({ row, onApply }: { row: CustomerRow; onApply: (key: string,
 
 	return (
 		<form onSubmit={(e) => { e.preventDefault(); onApply(row.key, values); }} noValidate className="flex min-h-full flex-col">
-			<SheetHeader>
+			<FormPanelHeader>
 				<SheetTitle>{row.name || "Cliente nuevo"}</SheetTitle>
 				<SheetDescription>Datos fiscales para la factura electrónica. Todos son opcionales por ahora.</SheetDescription>
-			</SheetHeader>
+			</FormPanelHeader>
 			<div className="px-4">
 				<FiscalFields
 					values={values}

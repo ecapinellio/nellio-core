@@ -12,7 +12,7 @@ interface OrderCardProps
 	order: KanbanOrder;
 	showConfirmButton?: boolean;
 	onConfirm?: () => void;
-	/** Slice 4: click on the card body (not the grip handle, not Confirmar) opens the detail dialog. */
+	/** Slice 4: click on the card body (not the grip handle, not Confirmar) opens the detail panel. */
 	onOpenDetail?: () => void;
 	isDragging?: boolean;
 	style?: CSSProperties;

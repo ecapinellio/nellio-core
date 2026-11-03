@@ -30,8 +30,8 @@ import { EmptyFilter, GridToastView, GridToolbar, PasteRenameDialog, SaveBar } f
 import { ConflictDialog } from "@/components/grid/conflict-dialog";
 import { PasteGuide } from "@/components/grid/paste-guide";
 import { CustomerRowView, type CustomerRowHandlers } from "@/components/customers/customer-row";
-import { FiscalSheet } from "@/components/customers/fiscal-sheet";
-import { CustomerEditSheet } from "@/components/customers/customer-edit-sheet";
+import { FiscalPanel } from "@/components/customers/fiscal-panel";
+import { CustomerEditPanel } from "@/components/customers/customer-edit-panel";
 
 const NOUNS = { one: "cliente", many: "clientes" };
 const COLUMN_LABELS: Record<CustomerColumn, string> = { name: "Nombre", phone: "Teléfono", address: "Dirección", tax_id: "NIT" };
@@ -331,7 +331,7 @@ export function CustomersManager({ customers }: { customers: CustomerRecord[] })
 				onCancel={() => grid.setPastePrompt(null)}
 			/>
 
-			<FiscalSheet
+			<FiscalPanel
 				row={fiscalRow}
 				onApply={(key, values) =>
 				{
@@ -341,7 +341,7 @@ export function CustomersManager({ customers }: { customers: CustomerRecord[] })
 				onClose={() => setFiscalKey(null)}
 			/>
 
-			<CustomerEditSheet
+			<CustomerEditPanel
 				row={editing}
 				allRows={rows}
 				duplicate={grid.nameTaken}

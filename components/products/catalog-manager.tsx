@@ -34,7 +34,7 @@ import { EmptyFilter, GridToastView, GridToolbar, PasteRenameDialog, SaveBar } f
 import { ConflictDialog } from "@/components/grid/conflict-dialog";
 import { CatalogRow, type RowHandlers } from "@/components/products/catalog-row";
 import { PasteGuide } from "@/components/grid/paste-guide";
-import { ProductEditSheet } from "@/components/products/product-edit-sheet";
+import { ProductEditPanel } from "@/components/products/product-edit-panel";
 
 const NOUNS = { one: "producto", many: "productos" };
 const COLUMN_LABELS: Record<GridColumn, string> = { name: "Nombre", price: "Precio", unit: "Unidad" };
@@ -331,7 +331,7 @@ export function CatalogManager({ products }: { products: CatalogProduct[] })
 				</DialogContent>
 			</Dialog>
 
-			<ProductEditSheet
+			<ProductEditPanel
 				row={editing}
 				duplicate={grid.nameTaken}
 				saving={saving}

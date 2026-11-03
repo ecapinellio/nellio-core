@@ -65,7 +65,7 @@ export function FiscalFields({
 							onChange={(e) => onChange(field, e.target.value)}
 							placeholder={PLACEHOLDERS[field]}
 							inputMode={field === "nrc" || field === "cod_actividad" ? "numeric" : field === "email" ? "email" : undefined}
-							autoFocus={field === focusField}
+							data-autofocus={field === focusField || undefined}
 							aria-invalid={error ? true : undefined}
 							aria-describedby={error ? `${id}-msg` : undefined}
 							className={`h-11 md:h-9 ${field === "nrc" || field === "cod_actividad" ? "font-mono tabular-nums" : ""}`}

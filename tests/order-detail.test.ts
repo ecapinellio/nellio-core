@@ -117,6 +117,90 @@ describe("getOrderDetail() / updateOrderDetail() / update_order_detail() RPC", (
 			expect(detail?.items[0].priceAtOrder).toBe(20);
 		});
 
+		// Two people with the same order open (ADR-010 makes the board live; the
+		// detail panel still saves what it loaded). Only the fields this panel
+		// changed are written, and each must still hold what it loaded.
+		describe("concurrent edits", () =>
+		{
+			it("a price-only save leaves a colleague's new notes alone", async () =>
+			{
+				const { orderId, itemId } = await freshOrder();
+				expect((await updateOrderDetail(tenant.operator, orderId, { notes: "colleague's notes", priceUpdates: [] })).error).toBeNull();
+
+				const { error } = await updateOrderDetail(tenant.admin, orderId, {
+					priceUpdates: [{ orderItemId: itemId, priceAtOrder: 12, expectedPriceAtOrder: 10 }],
+				});
+				expect(error).toBeNull();
+
+				const { data: detail } = await getOrderDetail(tenant.admin, orderId);
+				expect(detail?.notes).toBe("colleague's notes");
+				expect(detail?.items[0].priceAtOrder).toBe(12);
+			});
+
+			it("rejects notes a colleague changed meanwhile, writing nothing", async () =>
+			{
+				const { orderId, itemId } = await freshOrder();
+				expect((await updateOrderDetail(tenant.operator, orderId, { notes: "colleague's notes", priceUpdates: [] })).error).toBeNull();
+
+				const { error } = await updateOrderDetail(tenant.admin, orderId, {
+					notes: "my notes",
+					expectedNotes: "original notes",
+					priceUpdates: [{ orderItemId: itemId, priceAtOrder: 13, expectedPriceAtOrder: 10 }],
+				});
+				expect(error?.code).toBe("PT409");
+
+				const { data: detail } = await getOrderDetail(tenant.admin, orderId);
+				expect(detail?.notes).toBe("colleague's notes");
+				expect(detail?.items[0].priceAtOrder).toBe(10);
+			});
+
+			it("rejects a price a colleague changed meanwhile", async () =>
+			{
+				const { orderId, itemId } = await freshOrder();
+				expect((await updateOrderDetail(tenant.operator, orderId, {
+					priceUpdates: [{ orderItemId: itemId, priceAtOrder: 11, expectedPriceAtOrder: 10 }],
+				})).error).toBeNull();
+
+				const { error } = await updateOrderDetail(tenant.admin, orderId, {
+					priceUpdates: [{ orderItemId: itemId, priceAtOrder: 14, expectedPriceAtOrder: 10 }],
+				});
+				expect(error?.code).toBe("PT409");
+				expect((await getOrderDetail(tenant.admin, orderId)).data?.items[0].priceAtOrder).toBe(11);
+			});
+
+			it("a status move by a colleague is not a conflict", async () =>
+			{
+				const { orderId } = await freshOrder();
+				expect((await tenant.operator.from("orders").update({ status: "confirmed" }).eq("id", orderId)).error).toBeNull();
+
+				const { error } = await updateOrderDetail(tenant.admin, orderId, {
+					notes: "my notes",
+					expectedNotes: "original notes",
+					priceUpdates: [],
+				});
+				expect(error).toBeNull();
+				expect((await getOrderDetail(tenant.admin, orderId)).data?.notes).toBe("my notes");
+			});
+
+			it("a first price on a line without one checks against null", async () =>
+			{
+				const { data: unpriced } = await quickAddProduct(tenant.admin, `Unpriced ${crypto.randomUUID()}`);
+				const { data } = await createOrder(tenant.admin, {
+					customer_id: customerId,
+					notes: null,
+					items: [{ product_id: unpriced!.id, quantity: 1 }],
+				});
+				const itemId = data!.items[0].id;
+
+				expect((await updateOrderDetail(tenant.admin, data!.order.id, {
+					priceUpdates: [{ orderItemId: itemId, priceAtOrder: 5, expectedPriceAtOrder: null }],
+				})).error).toBeNull();
+				expect((await updateOrderDetail(tenant.admin, data!.order.id, {
+					priceUpdates: [{ orderItemId: itemId, priceAtOrder: 6, expectedPriceAtOrder: null }],
+				})).error?.code).toBe("PT409");
+			});
+		});
+
 		it("rejects price_at_order <= 0", async () =>
 		{
 			const { orderId, itemId } = await freshOrder();

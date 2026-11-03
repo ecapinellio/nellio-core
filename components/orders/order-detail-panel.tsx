@@ -38,6 +38,8 @@ interface EditableItem
 	/** Controlled as a string so a partially-typed number ("1.") doesn't get clobbered by re-parsing — parsed back to a number only on save. */
 	priceInput: string;
 	originalPriceInput: string;
+	/** The price as loaded: the save only goes through if the line still holds it. */
+	originalPrice: number | null;
 	priceOverriddenByName: string | null;
 	priceOverriddenAt: string | null;
 }
@@ -67,6 +69,10 @@ export function OrderDetailPanel({ orderId, onClose, onSaved }: OrderDetailPanel
 	const [saving, setSaving] = useState(false);
 	const [saveError, setSaveError] = useState<string | null>(null);
 	const [confirmingDiscard, setConfirmingDiscard] = useState(false);
+	/** Someone changed what this panel was editing: nothing was saved. */
+	const [conflict, setConflict] = useState(false);
+	// Bumped by "Ver la versión actual" to load the order again.
+	const [loadCount, setLoadCount] = useState(0);
 
 	// No synchronous setState here (React flags that as a cascading-render
 	// risk) — loading/error/stale-content are instead DERIVED below by
@@ -95,6 +101,7 @@ export function OrderDetailPanel({ orderId, onClose, onSaved }: OrderDetailPanel
 			setFailedOrderId(null);
 			setConfirmingDiscard(false);
 			setSaveError(null);
+			setConflict(false);
 			setDetail(data);
 			setNotes(data.notes ?? "");
 			setOriginalNotes(data.notes ?? "");
@@ -104,6 +111,7 @@ export function OrderDetailPanel({ orderId, onClose, onSaved }: OrderDetailPanel
 				quantity: item.quantity,
 				priceInput: toPriceInput(item.priceAtOrder),
 				originalPriceInput: toPriceInput(item.priceAtOrder),
+				originalPrice: item.priceAtOrder,
 				priceOverriddenByName: item.priceOverriddenByName,
 				priceOverriddenAt: item.priceOverriddenAt,
 			})));
@@ -113,7 +121,7 @@ export function OrderDetailPanel({ orderId, onClose, onSaved }: OrderDetailPanel
 		{
 			active = false;
 		};
-	}, [orderId, supabase]);
+	}, [orderId, supabase, loadCount]);
 
 	const showContent = detail !== null && detail.id === orderId;
 	const showError = failedOrderId !== null && failedOrderId === orderId;
@@ -130,6 +138,7 @@ export function OrderDetailPanel({ orderId, onClose, onSaved }: OrderDetailPanel
 	function reset()
 	{
 		setSaveError(null);
+		setConflict(false);
 		setConfirmingDiscard(false);
 	}
 
@@ -171,20 +180,28 @@ export function OrderDetailPanel({ orderId, onClose, onSaved }: OrderDetailPanel
 
 		setSaving(true);
 		setSaveError(null);
+		setConflict(false);
 
+		// Only what this panel changed, each with the value it loaded: two
+		// people on the same order don't overwrite each other (TODOS.md P2).
 		const priceUpdates = items
 			.filter((item) => item.priceInput !== "" && item.priceInput !== item.originalPriceInput)
-			.map((item) => ({ orderItemId: item.id, priceAtOrder: Number(item.priceInput) }));
+			.map((item) => ({ orderItemId: item.id, priceAtOrder: Number(item.priceInput), expectedPriceAtOrder: item.originalPrice }));
+		const notesChanged = notes.trim() !== originalNotes.trim();
 
-		const { error } = await updateOrderDetail(supabase, orderId, {
-			notes: notes.trim() || null,
-			priceUpdates,
-		});
+		const { error } = await updateOrderDetail(supabase, orderId, notesChanged
+			? { notes: notes.trim() || null, expectedNotes: detail?.notes ?? null, priceUpdates }
+			: { priceUpdates });
 
 		setSaving(false);
 
 		if (error)
 		{
+			if (error.code === "PT409")
+			{
+				setConflict(true);
+				return;
+			}
 			setSaveError(error.message || "No se pudo guardar. Intenta de nuevo.");
 			return;
 		}
@@ -291,6 +308,20 @@ export function OrderDetailPanel({ orderId, onClose, onSaved }: OrderDetailPanel
 											<Alert variant="destructive">
 												<AlertTriangle />
 												<AlertDescription>{saveError}</AlertDescription>
+											</Alert>
+										)
+										: null}
+
+									{conflict
+										? (
+											<Alert variant="destructive">
+												<AlertTriangle />
+												<AlertDescription className="flex flex-col items-start gap-2">
+													Alguien cambió este pedido mientras lo editabas. No se guardó nada.
+													<Button type="button" variant="outline" size="sm" className="h-11 md:h-8" onClick={() => setLoadCount((n) => n + 1)}>
+														Ver la versión actual
+													</Button>
+												</AlertDescription>
 											</Alert>
 										)
 										: null}

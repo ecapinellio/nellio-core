@@ -498,7 +498,12 @@ export type Database = {
       }
       tenant_id: { Args: Record<PropertyKey, never>; Returns: string }
       update_order_detail: {
-        Args: { p_notes: string; p_order_id: string; p_price_updates: Json }
+        Args: {
+          p_expected?: Json
+          p_notes: string
+          p_order_id: string
+          p_price_updates: Json
+        }
         Returns: Json
       }
     }

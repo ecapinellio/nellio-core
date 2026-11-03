@@ -72,18 +72,14 @@ active orders, so neither hurts yet.
 **Priority:** P3
 **Depends on:** Nothing.
 
-### Order detail dialog doesn't follow live changes
+### ~~Order detail can overwrite someone else's change~~ — DONE
 
-**What:** The board updates live (ADR-010), but an open order detail keeps what
-it loaded. Saving it can overwrite a price or quantity someone else just
-changed. Fix: a concurrent-edit check in `update_order_detail()`, like the grids.
-
-**Why:** Found while adding live updates (2026-11-03). Needs two people editing
-the same order within the same minute.
-
-**Effort:** S
-**Priority:** P2
-**Depends on:** Nothing.
+**Done 2026-11-03:** the panel sends only what it changed, each with the value
+it loaded; `update_order_detail()` rejects the save (PT409) if any of them
+moved, and the panel offers "Ver la versión actual". It used to send its notes
+on every save, so changing a price wiped a colleague's new notes. A status move
+is not a conflict. The open panel still doesn't refresh itself while you look
+at it; the conflict check is what keeps data safe.
 
 ### Show who else changed an order
 

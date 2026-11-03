@@ -517,11 +517,19 @@ export interface PriceUpdate
 {
 	orderItemId: string;
 	priceAtOrder: number;
+	/** The price as loaded (null = no price yet): the save is rejected (PT409) if it changed since. */
+	expectedPriceAtOrder?: number | null;
 }
 
 export interface UpdateOrderDetailInput
 {
-	notes: string | null;
+	/** Omit to leave the notes as they are. */
+	notes?: string | null;
+	/**
+	 * The notes as loaded: the save is rejected (PT409) if they changed since.
+	 * Without it, `notes` is written unchecked (the pre-2026-11-03 contract).
+	 */
+	expectedNotes?: string | null;
 	priceUpdates: PriceUpdate[];
 }
 
@@ -538,16 +546,23 @@ export async function updateOrderDetail(
 	input: UpdateOrderDetailInput,
 ): Promise<QueryResult<UpdateOrderDetailResult>>
 {
+	// p_expected says which fields to check and, for the notes, whether to
+	// write them at all. Null keeps the old contract (notes always written).
+	const legacy = input.notes !== undefined && input.expectedNotes === undefined;
+	const expected = legacy ? null : input.notes === undefined ? {} : { notes: input.expectedNotes ?? null };
+
 	const { data, error } = await supabase.rpc("update_order_detail", {
 		p_order_id: orderId,
 		// The generated Args type has p_notes as a required `string` — it
 		// doesn't know the RPC itself normalizes null/blank to NULL, same
 		// cast pattern as createOrder() uses for the same reason.
-		p_notes: input.notes as string,
+		p_notes: (input.notes ?? null) as string,
 		p_price_updates: input.priceUpdates.map((p) => ({
 			order_item_id: p.orderItemId,
 			price_at_order: p.priceAtOrder,
+			...(p.expectedPriceAtOrder !== undefined ? { expected_price_at_order: p.expectedPriceAtOrder } : {}),
 		})) as unknown as Json,
+		p_expected: expected as unknown as Json,
 	});
 
 	if (error)

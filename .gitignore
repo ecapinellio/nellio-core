@@ -42,3 +42,7 @@ next-env.d.ts
 
 .idea
 .gstack/
+
+# Claude Code: personal settings and throwaway worktrees
+.claude/settings.local.json
+.claude/worktrees/

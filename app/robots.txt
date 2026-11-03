@@ -1,0 +1,3 @@
+# Nellio Core is a private, login-only app: nothing here should be crawled.
+User-Agent: *
+Disallow: /

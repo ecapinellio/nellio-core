@@ -6,6 +6,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PASSWORD_PATH, mustChangePassword, newPasswordError } from "@/lib/auth/password";
 import { safeNextPath } from "@/lib/auth/safe-next";
+import { checkBotId } from "botid/server";
+
+// Vercel BotID verdict (instrumentation-client.ts). One message for both forms;
+// a real person who hits it (e.g. a blocked script) just reloads.
+const BOT_ERROR = "No pudimos verificar tu navegador. Recarga la página e intenta de nuevo.";
 
 export interface LoginState
 {
@@ -20,6 +25,13 @@ export async function login(_prevState: LoginState, formData: FormData): Promise
 	if (typeof email !== "string" || typeof password !== "string" || !email || !password)
 	{
 		return { error: "Ingresa tu correo y contraseña." };
+	}
+
+	// Before GoTrue: sign-in runs from the server's IP, so every attempt spends
+	// one rate-limit bucket all users share — a bot must not reach it.
+	if ((await checkBotId()).isBot)
+	{
+		return { error: BOT_ERROR };
 	}
 
 	const supabase = await createClient();
@@ -69,6 +81,13 @@ export async function changePassword(_prevState: ChangePasswordState, formData: 
 	if (problem)
 	{
 		return { error: problem };
+	}
+
+	// Same shared sign-in bucket as login(): the current-password probe below
+	// calls GoTrue from the server too.
+	if ((await checkBotId()).isBot)
+	{
+		return { error: BOT_ERROR };
 	}
 
 	// A voluntary change re-checks the current password, so an unlocked

@@ -16,6 +16,8 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
 	title: "Nellio Core",
 	description: "Gestión de pedidos y operaciones de distribución",
+	// Private app: never in search results (also robots.txt + X-Robots-Tag in next.config.ts).
+	robots: { index: false, follow: false },
 };
 
 export default function RootLayout({

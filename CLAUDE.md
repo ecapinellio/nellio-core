@@ -173,6 +173,26 @@ filas desde la app, usar borrado lógico. Toda tabla que deba verse en vivo se
 agrega a la publicación `supabase_realtime` por migración. Los movimientos desde una vista
 vieja se siguen rechazando (`updateOrderStatus` con estado esperado).
 
+### ADR-011: Bots — fuera de buscadores y BotID en los formularios de login
+**Decisión:** la app no se indexa (`app/robots.txt`, `robots` en metadata y
+`X-Robots-Tag` en `next.config.ts`). Los formularios que llaman a GoTrue
+desde el servidor (`/login` y `/account/password`) pasan por Vercel BotID:
+`initBotId` en `instrumentation-client.ts` + `checkBotId()` en
+`lib/auth/actions.ts` **antes** de llamar a GoTrue. Encima, reglas del
+Firewall de Vercel (Bot Protection, AI Bots, rate limit al POST de
+`/login`) configuradas en el dashboard.
+**Por qué:** es una app privada, no hay nada que indexar. Y el login corre
+en una Server Action, así que GoTrue ve la IP de Vercel: todos los usuarios
+comparten un mismo límite de intentos por IP, y un bot que mande logins
+falsos podría dejar a todos sin entrar (auditoría run-1). BotID corta al
+bot antes de que gaste ese límite.
+**Consecuencias:** `proxy.ts` excluye `robots.txt` y las rutas de BotID
+(`/149e9513-…/`) del matcher, o se redirigirían a `/login`. Fuera de
+producción `checkBotId()` siempre responde "humano" (dev y tests); la
+detección real solo se prueba en un deploy de Vercel. Un formulario nuevo
+que llame a GoTrue desde el servidor debe agregarse a `protect` y llamar a
+`checkBotId()`.
+
 ---
 
 ## Vistas del frontend por rol (Fase 1)

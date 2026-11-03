@@ -233,7 +233,9 @@ describe("user management: list, restore password, deactivate, reactivate", () =
 
 			const fresh = await signIn(user.email, result.data!.password);
 			expect(fresh.error).toBeNull();
-			expect((await fresh.client.from("users").select("id")).data!.length).toBeGreaterThan(0);
+			// Signed in, but no data until they replace the password the admin saw.
+			expect((await fresh.client.auth.getUser()).data.user?.app_metadata.must_change_password).toBe(true);
+			expect((await fresh.client.from("users").select("id")).data).toEqual([]);
 
 			const { data } = await listTenantUsers(tenant.admin);
 			expect(data!.find((x) => x.id === user.id)!.active).toBe(true);

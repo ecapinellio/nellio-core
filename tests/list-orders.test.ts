@@ -26,7 +26,8 @@ describe("listOrders()", () =>
 
 	async function insertOrder(createdAt: Date): Promise<string>
 	{
-		const { data, error } = await tenant.admin
+		// service_role: created_at is server-owned for tenant sessions.
+		const { data, error } = await tenant.service
 			.from("orders")
 			.insert({
 				tenant_id: tenant.tenantId,

@@ -14,6 +14,8 @@ export interface TestTenant
 	adminId: string;
 	operatorId: string;
 	driverId: string;
+	/** service_role client — for fixtures only (e.g. backdated orders, which tenant sessions can't write). */
+	service: Client;
 	teardown: () => Promise<void>;
 }
 
@@ -153,6 +155,7 @@ export async function setupTenant(): Promise<TestTenant>
 		adminId: adminUser.id,
 		operatorId: operatorUser.id,
 		driverId: driverUser.id,
+		service: admin,
 		teardown,
 	};
 }

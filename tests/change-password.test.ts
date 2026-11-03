@@ -176,13 +176,13 @@ describe("must_change_password: forced first-login password change", () =>
 		{
 			const user = await makeUser("operator");
 			const elsewhere = await signIn(user.email, user.password);
-			const { data: before } = await elsewhere.client.from("users").select("id");
-			expect(before!.length).toBeGreaterThan(0);
 			const { data: { session } } = await elsewhere.client.auth.getSession();
+			expect((await elsewhere.client.auth.getUser()).error).toBeNull();
 
 			caller = user.client;
 			await expect(changePassword({ error: null }, form("Solo-Yo-La-Conozco-7"))).rejects.toThrow("REDIRECT /");
 
+			// The flag is gone, so only the dead session keeps elsewhere out.
 			expect((await elsewhere.client.from("users").select("id")).data).toEqual([]);
 			expect((await elsewhere.client.auth.refreshSession({ refresh_token: session!.refresh_token })).error).not.toBeNull();
 			// The session that made the change keeps working.
@@ -214,6 +214,25 @@ describe("must_change_password: forced first-login password change", () =>
 
 	describe("backend half of the block (ADR-006)", () =>
 	{
+		it("the database itself refuses a user who still has to change their password", async () =>
+		{
+			// Signing in straight against the API (anon key is public) skips the
+			// proxy and the Server Actions — tenant_id() is what stops this.
+			const user = await makeUser("operator");
+			expect((await user.client.from("users").select("id")).data).toEqual([]);
+			expect((await user.client.from("tenants").select("id")).data).toEqual([]);
+			const { error: rpcError } = await user.client.rpc("quick_add_customer", { p_name: `Bloqueado ${randomUUID()}` });
+			expect(rpcError?.code).toBe("28000");
+
+			// Once the flag is cleared the same session works — no re-login needed.
+			await service.auth.admin.updateUserById(user.id, { app_metadata: { must_change_password: false } });
+			expect((await user.client.from("users").select("id")).data!.length).toBeGreaterThan(0);
+
+			// The admin's flag is the same rule: string "true" isn't the flag (matches mustChangePassword()).
+			await service.auth.admin.updateUserById(user.id, { app_metadata: { must_change_password: "true" } });
+			expect((await user.client.from("users").select("id")).data!.length).toBeGreaterThan(0);
+		});
+
 		it("server actions reject a caller who still has to change their password", async () =>
 		{
 			const admin = await makeUser("admin");

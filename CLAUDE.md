@@ -139,7 +139,10 @@ login del cliente y su fila en `customers`.
 ### ADR-009: Revocación de sesión dentro de `public.tenant_id()`
 **Decisión:** `tenant_id()` devuelve `NULL` si la sesión del JWT ya no existe
 en `auth.sessions` (se borra al cambiar la contraseña) o si el usuario está
-baneado (`banned_until > now()`). Desactivar = ban de Supabase Auth;
+baneado (`banned_until > now()`), o si todavía tiene que cambiar una
+contraseña generada por el admin (`app_metadata.must_change_password = true`,
+leído de `auth.users`, no del JWT; sin esto quien tuviera la contraseña
+temporal entraba directo a la API sin pasar por el proxy). Desactivar = ban de Supabase Auth;
 reactivar = desbanear + contraseña nueva **en una sola llamada**.
 **Por qué:** un access token sigue siendo válido hasta que expira (1h). Sin
 esto, un usuario desactivado o con contraseña restablecida podía seguir
@@ -227,6 +230,16 @@ verificación en backend.
   (el editor salta el RLS y muestra todas las filas).
 - Toda tabla nueva con `tenant_id`: activar RLS y crear la política de aislamiento.
 - Indexar siempre `tenant_id`.
+- Columnas de auditoría (quién creó / quién cambió / cuándo:
+  `orders.created_by`, `created_at`, `order_items.price_overridden_by/at`,
+  `updated_by`) las escribe un trigger, nunca quien llama a la API (un
+  operador puede hacer PATCH directo). Una línea cuyo precio/unidad no
+  coincide con el catálogo queda marcada como override, venga de donde
+  venga. Los triggers no actúan sin `auth.uid()` ni anidados
+  (`pg_trigger_depth() > 1`), para no bloquear `on delete set null`; los
+  fixtures de test que necesitan fechas pasadas usan `tenant.service`.
+- Checks de valores positivos en `numeric`: `x > 0` deja pasar `NaN`
+  (Postgres lo ordena arriba de todo). Agregar siempre `and x <> 'NaN'::numeric`.
 - Requisitos de contraseña (mín. 10 con mayúscula, minúscula, número y
   símbolo): definidos en `lib/auth/password.ts` y en `supabase/config.toml`
   (local). **`config.toml` no se sube a producción con `db push`**: en el

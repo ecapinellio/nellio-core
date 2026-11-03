@@ -196,7 +196,8 @@ describe("query helpers", () =>
 		async function freshCustomerWithOrder(status: string, createdAt: Date)
 		{
 			const { data: customer } = await quickAddCustomer(tenant.admin, `Dedup Test ${crypto.randomUUID()}`);
-			const { data: order, error } = await tenant.admin
+			// service_role: created_at is server-owned for tenant sessions.
+			const { data: order, error } = await tenant.service
 				.from("orders")
 				.insert({
 					tenant_id: tenant.tenantId,

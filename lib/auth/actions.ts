@@ -5,24 +5,11 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PASSWORD_PATH, mustChangePassword, newPasswordError } from "@/lib/auth/password";
+import { safeNextPath } from "@/lib/auth/safe-next";
 
 export interface LoginState
 {
 	error: string | null;
-}
-
-/**
- * Only allow redirecting back to a path already inside this app — a
- * user-controlled `next` param passed straight to redirect() would be an
- * open-redirect vector (e.g. `?next=https://evil.com`).
- */
-function safeNextPath(next: FormDataEntryValue | null): string
-{
-	if (typeof next !== "string" || !next.startsWith("/") || next.startsWith("//"))
-	{
-		return "/";
-	}
-	return next;
 }
 
 export async function login(_prevState: LoginState, formData: FormData): Promise<LoginState>

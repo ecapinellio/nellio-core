@@ -45,7 +45,8 @@ describe("getTodayStats() / get_today_stats() RPC", () =>
 	 */
 	async function insertOrderAt(t: TestTenant, customer: string, product: string, createdAt: Date, status: string, qty = 1)
 	{
-		const { data: order, error } = await t.admin
+		// service_role: created_at is server-owned for tenant sessions.
+		const { data: order, error } = await t.service
 			.from("orders")
 			.insert({ tenant_id: t.tenantId, customer_id: customer, notes: "stats fixture", status, created_at: createdAt.toISOString() })
 			.select()
@@ -134,7 +135,7 @@ describe("getTodayStats() / get_today_stats() RPC", () =>
 
 	it("sales_today sums only priced lines; unpriced_count counts the rest", async () =>
 	{
-		const { data: order } = await tenant.admin
+		const { data: order } = await tenant.service
 			.from("orders")
 			.insert({ tenant_id: tenant.tenantId, customer_id: customerId, notes: "mixed", status: "pending", created_at: NOW.toISOString() })
 			.select()

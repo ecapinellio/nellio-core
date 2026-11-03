@@ -9,20 +9,14 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-	DialogTrigger,
-} from "@/components/ui/dialog";
+import { SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { FormPanel, FormPanelFooter } from "@/components/form-panel";
 
 const GENERIC_ERROR = "No se pudo crear el usuario. Intenta de nuevo.";
 
 /**
- * "+ Agregar usuario" and its form (design review D1). On success it closes
+ * "+ Agregar usuario" and its form (design review D1), in the shared
+ * FormPanel. On success it closes
  * and hands the credentials up — the shared OneTimePasswordDialog shows
  * them, same as for restore/reactivate.
  */
@@ -99,20 +93,18 @@ export function CreateUserDialog({ onCreated }: { onCreated: (credentials: Crede
 	}
 
 	return (
-		<Dialog open={open} onOpenChange={handleOpenChange}>
-			<DialogTrigger asChild>
-				<Button>
-					<Plus />
-					Agregar usuario
-				</Button>
-			</DialogTrigger>
-			<DialogContent className="sm:max-w-md">
-				<DialogHeader>
-					<DialogTitle>Agregar usuario</DialogTitle>
-					<DialogDescription>Le generaremos una contraseña que verás una sola vez.</DialogDescription>
-				</DialogHeader>
+		<>
+			<Button onClick={() => handleOpenChange(true)}>
+				<Plus />
+				Agregar usuario
+			</Button>
+			<FormPanel open={open} onOpenChange={handleOpenChange}>
+				<SheetHeader>
+					<SheetTitle>Agregar usuario</SheetTitle>
+					<SheetDescription>Le generaremos una contraseña que verás una sola vez.</SheetDescription>
+				</SheetHeader>
 
-				<form id="create-user-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
+				<form id="create-user-form" onSubmit={handleSubmit} className="flex flex-col gap-4 px-4 pb-4">
 					<div className="flex flex-col gap-2">
 						<Label htmlFor="name">Nombre</Label>
 						<Input id="name" value={name} onChange={(e) => setName(e.target.value)} disabled={submitting} autoFocus />
@@ -146,16 +138,16 @@ export function CreateUserDialog({ onCreated }: { onCreated: (credentials: Crede
 						: null}
 				</form>
 
-				<DialogFooter>
-					<Button type="button" variant="secondary" onClick={() => handleOpenChange(false)} disabled={submitting}>
+				<FormPanelFooter className="sm:flex-row sm:justify-end">
+					<Button type="button" variant="secondary" className="h-11 md:h-9" onClick={() => handleOpenChange(false)} disabled={submitting}>
 						Cancelar
 					</Button>
-					<Button type="submit" form="create-user-form" disabled={submitting}>
+					<Button type="submit" form="create-user-form" className="h-11 md:h-9" disabled={submitting}>
 						{submitting ? <Loader2 className="animate-spin" /> : null}
 						{submitting ? "Creando…" : "Crear usuario"}
 					</Button>
-				</DialogFooter>
-			</DialogContent>
-		</Dialog>
+				</FormPanelFooter>
+			</FormPanel>
+		</>
 	);
 }

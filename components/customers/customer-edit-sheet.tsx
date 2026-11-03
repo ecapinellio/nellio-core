@@ -7,12 +7,14 @@ import { normalizeTaxId } from "@/lib/customers/parse";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { FormPanel, FormPanelFooter } from "@/components/form-panel";
 import { FiscalFields, firstFiscalError } from "@/components/customers/fiscal-fields";
 
 /**
  * Phone editing (customers design D8): one sheet with "Contacto" and
  * "Datos fiscales" and its own Guardar — no panel stacked on a sheet.
+ * In the shared FormPanel, like every form.
  */
 export function CustomerEditSheet({
 	row,
@@ -33,11 +35,9 @@ export function CustomerEditSheet({
 })
 {
 	return (
-		<Sheet open={row !== null} onOpenChange={(open) => { if (!open && !saving) onClose(); }}>
-			<SheetContent side="bottom" className="max-h-[90vh] gap-0 overflow-y-auto">
-				{row ? <EditForm key={row.key} row={row} allRows={allRows} duplicate={duplicate} saving={saving} error={error} onSave={onSave} /> : null}
-			</SheetContent>
-		</Sheet>
+		<FormPanel open={row !== null} onOpenChange={(open) => { if (!open && !saving) onClose(); }}>
+			{row ? <EditForm key={row.key} row={row} allRows={allRows} duplicate={duplicate} saving={saving} error={error} onSave={onSave} /> : null}
+		</FormPanel>
 	);
 }
 
@@ -79,7 +79,7 @@ function EditForm({
 	const warning = (issue: typeof issues.phone) => (issue?.kind === "warning" ? <p className="text-xs font-medium text-status-pending">⚠ {issue.message}</p> : null);
 
 	return (
-		<form onSubmit={submit} noValidate>
+		<form onSubmit={submit} noValidate className="flex min-h-full flex-col">
 			<SheetHeader>
 				<SheetTitle>{row.original ? "Editar cliente" : "Agregar cliente"}</SheetTitle>
 				<SheetDescription className="sr-only">Contacto y datos fiscales del cliente.</SheetDescription>
@@ -125,12 +125,12 @@ function EditForm({
 					/>
 				</section>
 			</div>
-			<SheetFooter>
+			<FormPanelFooter>
 				{error ? <p role="alert" className="text-sm font-medium text-destructive">{error}</p> : null}
 				<Button type="submit" className="h-11" disabled={saving}>
 					{saving ? <><Loader2 className="animate-spin" />Guardando…</> : "Guardar"}
 				</Button>
-			</SheetFooter>
+			</FormPanelFooter>
 		</form>
 	);
 }

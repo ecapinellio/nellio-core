@@ -16,7 +16,10 @@
 ## Component Library
 - **shadcn/ui sobre Radix UI primitives + Tailwind CSS v4.** No son alternativas: shadcn/ui es Radix + estilos Tailwind + componentes copiados al repo (sin dependencia opaca). Ya hay Tailwind v4 instalado — cero fricción de adopción.
 - `Command`/`Combobox` para búsqueda-con-quick-add de clientes/productos.
-- `Dialog` para el diálogo de confirmación obligatoria de pedido duplicado (no un banner pasivo).
+- **Dos contenedores, una regla:**
+  - **Panel (`components/form-panel.tsx`)** para todo lo que se llena o se lee con calma: agregar usuario, detalle de pedido, editar producto/cliente, datos fiscales. Desde la derecha en escritorio (560px, la lista queda a la vista), desde abajo en celular (hasta 90% de alto, al alcance del pulgar). Guardar fijo abajo.
+  - **`Dialog` centrado** solo para decisiones cortas que bloquean: pedido duplicado (no un banner pasivo), conflicto de edición, desactivar usuario, cambios sin guardar, contraseña de una sola vez. Interrumpe a propósito.
+  - Menús aparte: "Mover a…" (hoja inferior) y el menú ☰ (izquierda).
 
 ## Typography
 - **Headings/UI/Body:** Geist Sans — ya está cargada en el template (`next/font`), cero costo de migración.
@@ -74,6 +77,7 @@ Preview HTML generado y aprobado: `/private/tmp/claude-501/-Users-emiliocarbonel
 |------|----------|-----------|
 | 2026-07-24 | Sistema de diseño inicial creado | Creado vía `/design-consultation`, basado en CLAUDE.md + research de Linear/shadcn + feedback del usuario. Memorable thing: claridad de estado bajo presión de tiempo. |
 | 2026-07-24 | shadcn/ui + Radix elegido sobre Radix "puro" | El usuario dudaba entre shadcn y Radix; son la misma pila en capas — shadcn da los patrones Combobox/Dialog que la pantalla de captura necesita, sin reinventar accesibilidad. |
+| 2026-11-03 | Formularios en un solo panel; Dialog centrado solo para decisiones | Pedido del usuario: la app mezclaba diálogo centrado (agregar usuario, detalle de pedido) y hoja inferior (producto/cliente en celular). Ahora todo formulario usa el mismo panel (derecha en escritorio, abajo en celular); el Dialog queda para confirmaciones. Revierte el detalle de pedido como Dialog (revisión de diseño del slice 4), con acuerdo del usuario. |
 | 2026-11-02 | Pedidos en celular: pestañas por estado + botón de siguiente paso, sin arrastre | `/plan-design-review`: bajo `md`, cuatro pestañas fijas con contador (nunca se pierde de vista el pipeline) y la lista de ese estado. Cada tarjeta lleva el siguiente paso (Confirmar/Despachar/Entregar) y ⋯ "Mover a…" en una hoja inferior para cualquier estado. Todo cambio muestra "Cliente → Estado · Deshacer" 6s: un toque en celular es fácil de errar; los errores van en esa misma barra fija porque arriba quedan fuera de vista. El arrastre sigue solo en escritorio porque choca con el scroll. |
 | 2026-11-01 | Clientes `/customers` sobre la misma tabla + tres severidades | `/plan-design-review`: columnas Nombre/Teléfono/Dirección/NIT y una columna "Datos fiscales" (botón con borde: "Agregar" / "Faltan N" / "Completo" verde) que abre un panel lateral con "Aplicar" (se guarda con el Guardar de abajo). Tres severidades en toda tabla: gris "falta", rojo error (bloquea), ⚠ ámbar aviso (nunca bloquea, p. ej. NIT compartido entre sucursales). Pegar con encabezados los omite. En celular: lista con teléfono que llama + una hoja con Contacto y Datos fiscales. |
 | 2026-10-28 | Catálogo `/products`: tabla tipo hoja de cálculo con columnas fijas | `/plan-design-review`: pegar columnas desde Excel en vez de importador con mapeo (el usuario no quería "adivinar"). Estados por celda: gris "falta" (neutral) vs rojo con motivo; ámbar "Sin precio" = color Pendiente; punto teal = cambio sin guardar; barra fija abajo solo con cambios; conflicto de edición en Dialog. Bajo `md`: lista + edición de a uno, sin pegar. |

@@ -15,6 +15,8 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import { SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { FormPanel, FormPanelFooter } from "@/components/form-panel";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -47,8 +49,11 @@ function toPriceInput(price: number | null): string
 
 /**
  * Mobile-first per the design review's explicit reversal (user's call) of
- * the original "desktop-only for now" recommendation — line items stack
- * below `sm`, go inline at `sm:max-w-xl` and above (Decisions 1, 5, 6).
+ * the original "desktop-only for now" recommendation (Decisions 1, 5, 6).
+ * In the shared FormPanel since 2026-11-03 (DESIGN.md): from the right on
+ * desktop with the board still in view, from the bottom on a phone. Line
+ * items stack below `sm`. "Cambios sin guardar" is a short decision, so it's a
+ * centered Dialog on top.
  */
 export function OrderDetailDialog({ orderId, onClose, onSaved }: OrderDetailDialogProps)
 {
@@ -189,53 +194,47 @@ export function OrderDetailDialog({ orderId, onClose, onSaved }: OrderDetailDial
 	}
 
 	return (
-		<Dialog open={orderId !== null} onOpenChange={(open) => { if (!open) attemptClose(); }}>
-			<DialogContent className="sm:max-w-xl">
-				{confirmingDiscard
+		<>
+			<FormPanel open={orderId !== null} onOpenChange={(open) => { if (!open) attemptClose(); }}>
+				{showError
 					? (
 						<>
-							<DialogHeader>
-								<DialogTitle>Tenés cambios sin guardar</DialogTitle>
-								<DialogDescription>Si cerrás ahora, se pierden los cambios que hiciste en este pedido.</DialogDescription>
-							</DialogHeader>
-							<DialogFooter>
-								<Button variant="secondary" className="w-full sm:w-auto" onClick={() => setConfirmingDiscard(false)}>
-									Seguir editando
-								</Button>
-								<Button variant="destructive" className="w-full sm:w-auto" onClick={discardAndClose}>
-									Descartar cambios
-								</Button>
-							</DialogFooter>
-						</>
-					)
-					: showError
-						? (
-							<>
-								<DialogHeader>
-									<DialogTitle>No se pudo cargar el pedido</DialogTitle>
-									<DialogDescription>Intenta de nuevo o cerrá este dialog.</DialogDescription>
-								</DialogHeader>
+							<SheetHeader>
+								<SheetTitle>No se pudo cargar el pedido</SheetTitle>
+								<SheetDescription>Intenta de nuevo o cierra el panel.</SheetDescription>
+							</SheetHeader>
+							<div className="px-4 pb-4">
 								<Alert variant="destructive">
 									<AlertTriangle />
 									<AlertDescription>No se pudo cargar el pedido.</AlertDescription>
 								</Alert>
+							</div>
+						</>
+					)
+					: showLoading
+						? (
+							<>
+								<SheetHeader>
+									<SheetTitle>Pedido</SheetTitle>
+									<SheetDescription className="sr-only">Cargando el pedido.</SheetDescription>
+								</SheetHeader>
+								<p className="py-8 text-center text-sm text-muted-foreground">Cargando...</p>
 							</>
 						)
-						: showLoading
-							? <p className="py-8 text-center text-sm text-muted-foreground">Cargando...</p>
-							: detail && detail.id === orderId && (
-								<>
-									<DialogHeader>
-										<DialogTitle>{detail.customerName}</DialogTitle>
-										<DialogDescription className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs tabular-nums">
-											<span>#{detail.id.slice(0, 8)}</span>
-											<OrderStatusBadge status={detail.status} />
-											<span>{formatChannel(detail.channel)}</span>
-											<span>{formatOrderTimestamp(detail.createdAt)}</span>
-											{detail.customerPhone ? <span>· {detail.customerPhone}</span> : null}
-										</DialogDescription>
-									</DialogHeader>
+						: detail && detail.id === orderId && (
+							<div className="flex min-h-full flex-col">
+								<SheetHeader className="pr-12">
+									<SheetTitle>{detail.customerName}</SheetTitle>
+									<SheetDescription className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs tabular-nums">
+										<span>#{detail.id.slice(0, 8)}</span>
+										<OrderStatusBadge status={detail.status} />
+										<span>{formatChannel(detail.channel)}</span>
+										<span>{formatOrderTimestamp(detail.createdAt)}</span>
+										{detail.customerPhone ? <span>· {detail.customerPhone}</span> : null}
+									</SheetDescription>
+								</SheetHeader>
 
+								<div className="flex flex-col gap-4 px-4 pb-4">
 									<div className="flex flex-col gap-2">
 										<Label htmlFor="order-detail-notes">Notas</Label>
 										<Textarea
@@ -294,18 +293,36 @@ export function OrderDetailDialog({ orderId, onClose, onSaved }: OrderDetailDial
 											</Alert>
 										)
 										: null}
+								</div>
 
-									<DialogFooter>
-										<Button variant="secondary" className="w-full sm:w-auto" onClick={attemptClose} disabled={saving}>
-											Cancelar
-										</Button>
-										<Button className="w-full sm:w-auto" onClick={handleSave} disabled={saving}>
-											{saving ? "Guardando..." : "Guardar"}
-										</Button>
-									</DialogFooter>
-								</>
-							)}
-			</DialogContent>
-		</Dialog>
+								<FormPanelFooter className="sm:flex-row sm:justify-end">
+									<Button variant="secondary" className="h-11 md:h-9" onClick={attemptClose} disabled={saving}>
+										Cancelar
+									</Button>
+									<Button className="h-11 md:h-9" onClick={handleSave} disabled={saving}>
+										{saving ? "Guardando..." : "Guardar"}
+									</Button>
+								</FormPanelFooter>
+							</div>
+						)}
+			</FormPanel>
+
+			<Dialog open={confirmingDiscard} onOpenChange={(open) => { if (!open) setConfirmingDiscard(false); }}>
+				<DialogContent showCloseButton={false} className="sm:max-w-md">
+					<DialogHeader>
+						<DialogTitle>Tenés cambios sin guardar</DialogTitle>
+						<DialogDescription>Si cerrás ahora, se pierden los cambios que hiciste en este pedido.</DialogDescription>
+					</DialogHeader>
+					<DialogFooter>
+						<Button variant="secondary" className="w-full sm:w-auto" onClick={() => setConfirmingDiscard(false)}>
+							Seguir editando
+						</Button>
+						<Button variant="destructive" className="w-full sm:w-auto" onClick={discardAndClose}>
+							Descartar cambios
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+		</>
 	);
 }

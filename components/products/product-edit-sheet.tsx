@@ -8,11 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { FormPanel, FormPanelFooter } from "@/components/form-panel";
 
 /**
  * Phone editing (design D11 / 8A): one product at a time, 44px controls,
  * no paste. Saves straight away — on a phone there's no grid to batch.
+ * In the shared FormPanel, like every form.
  */
 export function ProductEditSheet({
 	row,
@@ -31,11 +33,9 @@ export function ProductEditSheet({
 })
 {
 	return (
-		<Sheet open={row !== null} onOpenChange={(open) => { if (!open && !saving) onClose(); }}>
-			<SheetContent side="bottom" className="max-h-[90vh] gap-0 overflow-y-auto">
-				{row ? <EditForm key={row.key} row={row} duplicate={duplicate} saving={saving} error={error} onSave={onSave} /> : null}
-			</SheetContent>
-		</Sheet>
+		<FormPanel open={row !== null} onOpenChange={(open) => { if (!open && !saving) onClose(); }}>
+			{row ? <EditForm key={row.key} row={row} duplicate={duplicate} saving={saving} error={error} onSave={onSave} /> : null}
+		</FormPanel>
 	);
 }
 
@@ -73,7 +73,7 @@ function EditForm({
 	}
 
 	return (
-		<form onSubmit={submit} noValidate>
+		<form onSubmit={submit} noValidate className="flex min-h-full flex-col">
 			<SheetHeader>
 				<SheetTitle>{row.original ? "Editar producto" : "Agregar producto"}</SheetTitle>
 				<SheetDescription className="sr-only">Nombre, precio, unidad y estado del producto.</SheetDescription>
@@ -115,12 +115,12 @@ function EditForm({
 					)
 					: null}
 			</div>
-			<SheetFooter>
+			<FormPanelFooter>
 				{error ? <p role="alert" className="text-sm font-medium text-destructive">{error}</p> : null}
 				<Button type="submit" className="h-11" disabled={saving}>
 					{saving ? <><Loader2 className="animate-spin" />Guardando…</> : "Guardar"}
 				</Button>
-			</SheetFooter>
+			</FormPanelFooter>
 		</form>
 	);
 }

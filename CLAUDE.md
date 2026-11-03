@@ -163,8 +163,11 @@ descuadraría con cualquier evento perdido (un corte de red los pierde).
 **Consecuencias:** Realtime evalúa el RLS de cada suscriptor, así que el
 aislamiento por tenant y la revocación (ADR-009) aplican igual; lo cubre
 `tests/orders-realtime.test.ts`. El filtro `tenant_id` del canal solo reduce
-trabajo, no es seguridad. Toda tabla que deba verse en vivo se agrega a la
-publicación `supabase_realtime` por migración. Los movimientos desde una vista
+trabajo, no es seguridad. **DELETE no pasa por RLS ni por filtros en Realtime**
+(llega a todos con el `id`), así que el tablero solo escucha INSERT y UPDATE, y
+estas tablas no deben usar `REPLICA IDENTITY FULL`; si algún día se borran
+filas desde la app, usar borrado lógico. Toda tabla que deba verse en vivo se
+agrega a la publicación `supabase_realtime` por migración. Los movimientos desde una vista
 vieja se siguen rechazando (`updateOrderStatus` con estado esperado).
 
 ---

@@ -25,10 +25,21 @@ describe("live /orders (ADR-010)", () =>
 	async function listen(client: SupabaseClient<Database>, tenantId: string)
 	{
 		const received = { count: 0 };
-		await new Promise<void>((resolve) =>
+		await new Promise<void>((resolve, reject) =>
 		{
-			subscribeToOrders(client, tenantId, () => received.count++, resolve)
-				.then((channel) => channels.push([client, channel]));
+			subscribeToOrders(client, tenantId, () => received.count++, (status) =>
+			{
+				if (status === "SUBSCRIBED")
+				{
+					resolve();
+				}
+				else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT")
+				{
+					reject(new Error(`Realtime channel ${status}`));
+				}
+			})
+				.then((channel) => channels.push([client, channel]))
+				.catch(reject);
 		});
 		// SUBSCRIBED is the channel; the database listener lands just after it.
 		await new Promise((resolve) => setTimeout(resolve, QUIET_MS));
@@ -84,7 +95,7 @@ describe("live /orders (ADR-010)", () =>
 	it("tells another session of the same tenant when an order moves", async () =>
 	{
 		const received = await listen(tenant.operator, tenant.tenantId);
-		await updateOrderStatus(tenant.admin, orderId, "confirmed");
+		expect((await updateOrderStatus(tenant.admin, orderId, "confirmed")).error).toBeNull();
 		await settle(received, true);
 		await stop();
 	});
@@ -120,7 +131,7 @@ describe("live /orders (ADR-010)", () =>
 	it("tells another session when a line of an order changes", async () =>
 	{
 		const received = await listen(tenant.operator, tenant.tenantId);
-		await tenant.admin.from("order_items").update({ quantity: 2 }).eq("order_id", orderId);
+		expect((await tenant.admin.from("order_items").update({ quantity: 2 }).eq("order_id", orderId)).error).toBeNull();
 		await settle(received, true);
 		await stop();
 	});
@@ -130,19 +141,44 @@ describe("live /orders (ADR-010)", () =>
 		const control = await listen(tenant.operator, tenant.tenantId);
 		const own = await listen(otherTenant.operator, otherTenant.tenantId);
 		const forged = await listen(otherTenant.admin, tenant.tenantId);
-		await updateOrderStatus(tenant.admin, orderId, "dispatched");
+		expect((await updateOrderStatus(tenant.admin, orderId, "dispatched")).error).toBeNull();
 		await settle(control, true);
 		await settle(own, false);
 		await settle(forged, false);
 		await stop();
 	});
 
+	// Realtime applies neither RLS nor filters to DELETE events, so the board
+	// must not listen to them: here, another tenant being offboarded.
+	it("tells nothing when another tenant's orders are deleted", async () =>
+	{
+		const leaving = await setupTenant();
+		const [{ data: customer }, { data: product }] = await Promise.all([
+			quickAddCustomer(leaving.admin, "Leaving Customer"),
+			quickAddProduct(leaving.admin, "Leaving Product", { pricePerUnit: 1, unit: "each" }),
+		]);
+		expect((await createOrder(leaving.admin, {
+			customer_id: customer!.id,
+			notes: "leaving",
+			items: [{ product_id: product!.id, quantity: 1 }],
+		})).error).toBeNull();
+
+		const received = await listen(tenant.operator, tenant.tenantId);
+		await leaving.teardown();
+		await settle(received, false);
+
+		// Still listening: a change of its own tenant arrives.
+		expect((await tenant.admin.from("orders").update({ notes: "after delete" }).eq("id", orderId)).error).toBeNull();
+		await settle(received, true);
+		await stop();
+	}, 30_000);
+
 	it("stops telling a deactivated user (ADR-009)", async () =>
 	{
 		const control = await listen(tenant.operator, tenant.tenantId);
 		const received = await listen(tenant.driver, tenant.tenantId);
 		await service.auth.admin.updateUserById(tenant.driverId, { ban_duration: "1h" });
-		await updateOrderStatus(tenant.admin, orderId, "delivered");
+		expect((await updateOrderStatus(tenant.admin, orderId, "delivered")).error).toBeNull();
 		await settle(control, true);
 		await settle(received, false);
 		await stop();

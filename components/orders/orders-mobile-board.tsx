@@ -37,8 +37,8 @@ interface OrdersMobileBoardProps
 	groups: Record<OrderStatus, KanbanOrder[]>;
 	/** The board shows it in a fixed bar; here it replaces the undo bar and keeps the list clear of it. */
 	error: string | null;
-	/** Resolves to false if the move failed (the board shows the error). */
-	onMove: (orderId: string, status: OrderStatus) => Promise<boolean>;
+	/** Resolves to false if the move failed (the board shows the error). `expected` is the status the control showed. */
+	onMove: (orderId: string, status: OrderStatus, expected: OrderStatus) => Promise<boolean>;
 	onOpenDetail: (orderId: string) => void;
 }
 
@@ -91,7 +91,7 @@ export function OrdersMobileBoard({ groups, error, onMove, onOpenDetail }: Order
 	{
 		const from = order.status as OrderStatus;
 		setUndo(null);
-		if (from !== to && await onMove(order.id, to))
+		if (from !== to && await onMove(order.id, to, from))
 		{
 			setUndo({ orderId: order.id, customerName: order.customerName, from, to });
 		}
@@ -102,7 +102,7 @@ export function OrdersMobileBoard({ groups, error, onMove, onOpenDetail }: Order
 		if (undo)
 		{
 			setUndo(null);
-			onMove(undo.orderId, undo.from);
+			onMove(undo.orderId, undo.from, undo.to);
 		}
 	}
 

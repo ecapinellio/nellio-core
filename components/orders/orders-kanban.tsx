@@ -99,6 +99,7 @@ function resolveTargetStatus(overId: string, orders: KanbanOrder[]): OrderStatus
 }
 
 const ERROR_MS = 8000;
+const CHANGED_MESSAGE = "Este pedido cambió mientras tenías la pantalla abierta. Revisa su estado actual.";
 
 interface OrdersKanbanProps
 {
@@ -131,6 +132,13 @@ export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 	const refreshSequence = useRef(0);
 	const dragging = useRef(false);
 	const refreshAfterDrag = useRef(false);
+	const loaded = useRef(false);
+	const shownOrders = useRef<KanbanOrder[] | null>(null);
+
+	useEffect(() =>
+	{
+		shownOrders.current = orders;
+	}, [orders]);
 
 	const fetchLatestOrders = useCallback(async () =>
 	{
@@ -145,11 +153,12 @@ export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 		return result;
 	}, [supabase]);
 
-	// Someone else's change, or coming back to the screen. Quiet: a failed
-	// refresh keeps what's on screen instead of raising an error for something
-	// the user didn't do. Never mid-drag (the board would shift under the
-	// finger), and only the newest response wins.
-	const refreshBoard = useCallback(async () =>
+	// Every load goes through here: the first one, someone else's change,
+	// coming back to the screen, after a save. Never mid-drag (the board would
+	// shift under the finger), and only the newest response wins. A failed
+	// refresh is quiet unless the user asked for it (`reportErrors`), and an
+	// identical list (the echo of the user's own move) changes nothing.
+	const refreshBoard = useCallback(async ({ reportErrors = false }: { reportErrors?: boolean } = {}) =>
 	{
 		if (dragging.current)
 		{
@@ -158,8 +167,20 @@ export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 		}
 		const sequence = ++refreshSequence.current;
 		const { data, error } = await fetchLatestOrders();
-		if (error || !data || sequence !== refreshSequence.current)
+		if (sequence !== refreshSequence.current)
 		{
+			return;
+		}
+		if (error || !data)
+		{
+			if (!loaded.current)
+			{
+				setLoadError(true);
+			}
+			else if (reportErrors)
+			{
+				setActionError("No se pudieron actualizar los pedidos. Refrescá la página.");
+			}
 			return;
 		}
 		if (dragging.current)
@@ -167,8 +188,20 @@ export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 			refreshAfterDrag.current = true;
 			return;
 		}
-		setOrders(applyPendingMoves(data, pendingMoves.current));
-		onOrderChanged?.();
+
+		const next = applyPendingMoves(data, pendingMoves.current);
+		const firstLoad = !loaded.current;
+		loaded.current = true;
+		setLoadError(false);
+		if (JSON.stringify(next) === JSON.stringify(shownOrders.current))
+		{
+			return;
+		}
+		setOrders(next);
+		if (!firstLoad)
+		{
+			onOrderChanged?.();
+		}
 	}, [fetchLatestOrders, onOrderChanged]);
 
 	useRefreshOnReturn(refreshBoard);
@@ -184,27 +217,12 @@ export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 		return () => clearTimeout(timer);
 	}, [actionError]);
 
+	// First load, through the same path as every refresh.
 	useEffect(() =>
 	{
-		let active = true;
-		listOrdersForKanban(supabase).then(({ data, error }) =>
-		{
-			if (!active)
-			{
-				return;
-			}
-			if (error)
-			{
-				setLoadError(true);
-				return;
-			}
-			setOrders(data);
-		});
-		return () =>
-		{
-			active = false;
-		};
-	}, [supabase]);
+		const timer = setTimeout(refreshBoard, 0);
+		return () => clearTimeout(timer);
+	}, [refreshBoard]);
 
 	const sensors = useSensors(
 		useSensor(PointerSensor),
@@ -214,30 +232,27 @@ export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 	const groups = useMemo(() => groupOrdersByStatus(orders ?? []), [orders]);
 	const activeOrder = orders?.find((order) => order.id === activeId) ?? null;
 
-	/** Post-save refetch (eng-review Decision 6) — a full re-fetch, not an in-memory patch, since this is a deliberate low-frequency action, not a frequent drag. */
-	async function refetchOrders()
-	{
-		const { data, error } = await fetchLatestOrders();
-		if (error || !data)
-		{
-			setActionError("No se pudieron actualizar los pedidos. Refrescá la página.");
-			return;
-		}
-		setOrders(applyPendingMoves(data, pendingMoves.current));
-	}
-
 	// Optimistic update, reverted on error (failure mode: network error
 	// mid-drag) — the operator sees the move happen immediately, not after
 	// a round trip, since that's the whole point of drag-and-drop.
 	// Functional updates, and the revert touches this order only: on a phone
 	// two quick moves can overlap, and restoring a snapshot would undo the
 	// other. One write per order at a time, so they can't land out of order.
-	async function moveOrder(orderId: string, newStatus: OrderStatus): Promise<boolean>
+	//
+	// `expectedStatus`: the status the control showed when it was tapped. With a
+	// live board the list can change under the finger, and Deshacer must not
+	// revert a colleague's move that arrived meanwhile.
+	async function moveOrder(orderId: string, newStatus: OrderStatus, expectedStatus?: OrderStatus): Promise<boolean>
 	{
 		const current = orders?.find((order) => order.id === orderId);
 		if (!current)
 		{
 			setActionError("Ese pedido ya no está en el tablero.");
+			return false;
+		}
+		if (expectedStatus && current.status !== expectedStatus)
+		{
+			setActionError(CHANGED_MESSAGE);
 			return false;
 		}
 		if (current.status === newStatus || pendingMoves.current.has(orderId))
@@ -260,10 +275,8 @@ export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 		if (error)
 		{
 			setStatus(current.status);
-			setActionError(error.code === "PGRST116"
-				? "Este pedido cambió mientras tenías la pantalla abierta. Revisa su estado actual."
-				: "No se pudo actualizar el pedido. Intenta de nuevo.");
-			refetchOrders();
+			setActionError(error.code === "PGRST116" ? CHANGED_MESSAGE : "No se pudo actualizar el pedido. Intenta de nuevo.");
+			refreshBoard();
 			return false;
 		}
 		onOrderChanged?.();
@@ -336,7 +349,7 @@ export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 								key={status}
 								status={status}
 								orders={groups[status]}
-								onConfirm={(orderId) => moveOrder(orderId, "confirmed")}
+								onConfirm={(orderId) => moveOrder(orderId, "confirmed", "pending")}
 								onOpenDetail={setOpenOrderId}
 							/>
 						))}
@@ -354,8 +367,7 @@ export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 				onSaved={() =>
 				{
 					setOpenOrderId(null);
-					refetchOrders();
-					onOrderChanged?.();
+					refreshBoard({ reportErrors: true });
 				}}
 			/>
 		</div>

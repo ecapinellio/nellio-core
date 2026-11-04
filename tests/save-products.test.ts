@@ -384,6 +384,34 @@ describe("product catalog: save_products(), deactivation, duplicates", () =>
 		});
 	});
 
+	describe("direct table writes", () =>
+	{
+		it("can't skip the name limits or round a price silently", async () =>
+		{
+			const direct = () => tenant.operator.from("products");
+
+			for (const bad of [
+				{ name: "" }, { name: " \t" }, { name: "x".repeat(201) },
+				{ price_per_unit: 1.005 }, { price_per_unit: 100000000 }, { price_per_unit: "Infinity" as unknown as number },
+			])
+			{
+				const { error } = await direct().insert({ tenant_id: tenant.tenantId, name: unique("Direct"), unit: "kg", ...bad });
+				expect(error?.code, JSON.stringify(bad)).toBe("23514");
+			}
+
+			const name = unique("Direct ok");
+			const { data, error } = await direct()
+				.insert({ tenant_id: tenant.tenantId, name, unit: "kg", price_per_unit: 99999999.99 })
+				.select("id, price_per_unit").single();
+			expect(error).toBeNull();
+			expect(data!.price_per_unit).toBe(99999999.99);
+			expect((await direct().update({ price_per_unit: 12.5 }).eq("id", data!.id)).error).toBeNull();
+			expect((await direct().update({ name: " " }).eq("id", data!.id)).error?.code).toBe("23514");
+
+			expect((await quickAddProduct(tenant.operator, "x".repeat(201))).error?.code).toBe("23514");
+		});
+	});
+
 	describe("saveProducts() Server Action", () =>
 	{
 		it("saves for an operator", async () =>

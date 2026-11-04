@@ -226,6 +226,32 @@ describe("customers: save_customers(), formats, deactivation, capture search", (
 			expect((await customer(tenant.admin, legacy)).tax_id).toBeNull();
 		});
 
+		it("direct table writes can't skip the name and length limits", async () =>
+		{
+			const direct = () => tenant.operator.from("customers");
+
+			for (const bad of [
+				{ name: "" }, { name: " \t\n" }, { name: "x".repeat(201) },
+				{ phone: "1".repeat(101) }, { address: "x".repeat(501) },
+				{ legal_name: "x".repeat(201) }, { desc_actividad: "x".repeat(201) },
+				{ email: `${"a".repeat(250)}@b.co` },
+			])
+			{
+				const { error } = await direct().insert({ tenant_id: tenant.tenantId, name: unique("Direct long"), ...bad });
+				expect(error?.code, JSON.stringify(bad).slice(0, 40)).toBe("23514");
+			}
+
+			const name = unique("Direct ok");
+			expect((await direct().insert({
+				tenant_id: tenant.tenantId, name, phone: "1".repeat(100), address: "x".repeat(500),
+			})).error).toBeNull();
+			const row = await customer(tenant.admin, name);
+			expect((await direct().update({ name: "   " }).eq("id", row.id)).error?.code).toBe("23514");
+
+			// quick_add_customer() never had a length limit of its own.
+			expect((await quickAddCustomer(tenant.operator, "x".repeat(201))).error?.code).toBe("23514");
+		});
+
 		it("is all-or-nothing, takes tenant from the JWT, rejects foreign ids and drivers", async () =>
 		{
 			const good = unique("Good");

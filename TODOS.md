@@ -395,20 +395,15 @@ direct writes isn't possible while the RPCs are security invoker. Products'
 price and unit were already covered by table CHECKs. A direct write still skips
 the concurrent-edit check: that's UX for the grid, not a security rule.
 
-### Direct writes still skip name and length limits
+### ~~Direct writes still skip name and length limits~~ — DONE
 
-**What:** Non-blank name and the length limits (name, phone, address, fiscal
-text) live only in `save_customers()` / `save_products()`; a direct PostgREST
-write can store a blank name or a 200,000-character phone. Products' price also
-rounds silently to 2 decimals there. Fix: table CHECKs (`NOT VALID` is fine for
-these, they don't depend on "changed").
-
-**Why:** Not reachable from the app; defense in depth. Found by `/review`
-(2026-11-02).
-
-**Effort:** S
-**Priority:** P3
-**Depends on:** Nothing.
+**Done 2026-11-04:** table CHECKs on `customers` / `products` (non-blank name,
+tabs and newlines included; the RPCs' length limits; email ≤ 254). They also
+cover `quick_add_*`, which had no length limit. `products.price_per_unit` is now
+plain `numeric` with a check (2 decimals, ≤ 99,999,999.99, no Infinity), so a
+direct write is rejected instead of rounded. Validated, not `NOT VALID`: a
+`NOT VALID` check still applies on every UPDATE, so it wouldn't spare legacy
+rows anyway. `order_items.price_at_order` still rounds to 2 decimals.
 
 ### Legacy fiscal values with tabs/newlines block a customer's save
 

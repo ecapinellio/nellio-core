@@ -444,7 +444,7 @@ export function OrderDetailPanel({ orderId, onClose, onSaved, isAdmin }: OrderDe
 										)
 										: null}
 
-													{actionError
+									{actionError
 										? (
 											<Alert variant="destructive">
 												<AlertTriangle />

@@ -168,15 +168,11 @@ describe("audit columns can't be forged through direct API writes", () =>
 	it("created_at is server-owned: can't be backdated on insert or moved on update", async () =>
 	{
 		const past = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
-		const before = Date.now() - 60_000;
 
-		const { data: inserted, error } = await tenant.operator.from("orders")
-			.insert({ tenant_id: tenant.tenantId, customer_id: customerId, created_at: past, updated_at: past })
-			.select("id, created_at, updated_at")
-			.single();
-		expect(error).toBeNull();
-		expect(new Date(inserted!.created_at).getTime()).toBeGreaterThan(before);
-		expect(new Date(inserted!.updated_at).getTime()).toBeGreaterThan(before);
+		// Column privileges (fulfillment locks) now refuse the forged insert outright.
+		const { error } = await tenant.operator.from("orders")
+			.insert({ tenant_id: tenant.tenantId, customer_id: customerId, created_at: past, updated_at: past });
+		expect(error?.code).toBe("42501");
 
 		const { orderId, itemId } = await freshOrder();
 		const { data: original } = await service.from("orders").select("created_at").eq("id", orderId).single();

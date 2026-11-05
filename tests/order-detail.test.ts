@@ -171,7 +171,7 @@ describe("getOrderDetail() / updateOrderDetail() / update_order_detail() RPC", (
 			it("a status move by a colleague is not a conflict", async () =>
 			{
 				const { orderId } = await freshOrder();
-				expect((await tenant.operator.from("orders").update({ status: "confirmed" }).eq("id", orderId)).error).toBeNull();
+				expect((await tenant.service.from("orders").update({ status: "confirmed" }).eq("id", orderId)).error).toBeNull();
 
 				const { error } = await updateOrderDetail(tenant.admin, orderId, {
 					notes: "my notes",

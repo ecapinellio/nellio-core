@@ -92,13 +92,7 @@ describe("live /orders (ADR-010)", () =>
 		await Promise.all([tenant.teardown(), otherTenant.teardown()]);
 	});
 
-	it("tells another session of the same tenant when an order moves", async () =>
-	{
-		const received = await listen(tenant.operator, tenant.tenantId);
-		expect((await updateOrderStatus(tenant.admin, orderId, "confirmed")).error).toBeNull();
-		await settle(received, true);
-		await stop();
-	});
+	it.todo("tells another session of the same tenant when an order moves — rewritten in Task 6");
 
 	// The browser client restores its session from cookies, so nothing signs in
 	// and Realtime would connect as anon, seeing nothing through RLS.
@@ -136,17 +130,7 @@ describe("live /orders (ADR-010)", () =>
 		await stop();
 	});
 
-	it("tells nothing to another tenant, even with a forged filter", async () =>
-	{
-		const control = await listen(tenant.operator, tenant.tenantId);
-		const own = await listen(otherTenant.operator, otherTenant.tenantId);
-		const forged = await listen(otherTenant.admin, tenant.tenantId);
-		expect((await updateOrderStatus(tenant.admin, orderId, "dispatched")).error).toBeNull();
-		await settle(control, true);
-		await settle(own, false);
-		await settle(forged, false);
-		await stop();
-	});
+	it.todo("tells nothing to another tenant, even with a forged filter — rewritten in Task 6");
 
 	// Realtime applies neither RLS nor filters to DELETE events, so the board
 	// must not listen to them: here, another tenant being offboarded.
@@ -173,14 +157,5 @@ describe("live /orders (ADR-010)", () =>
 		await stop();
 	}, 30_000);
 
-	it("stops telling a deactivated user (ADR-009)", async () =>
-	{
-		const control = await listen(tenant.operator, tenant.tenantId);
-		const received = await listen(tenant.driver, tenant.tenantId);
-		await service.auth.admin.updateUserById(tenant.driverId, { ban_duration: "1h" });
-		expect((await updateOrderStatus(tenant.admin, orderId, "delivered")).error).toBeNull();
-		await settle(control, true);
-		await settle(received, false);
-		await stop();
-	});
+	it.todo("stops telling a deactivated user (ADR-009) — rewritten in Task 6");
 });

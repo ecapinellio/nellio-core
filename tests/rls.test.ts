@@ -74,7 +74,8 @@ describe("RLS regression matrix (retroactive T8 coverage)", () =>
 	describe.each([
 		{ table: "customers" as const, id: () => customerId, patch: () => ({ updated_at: new Date().toISOString() }) },
 		{ table: "products" as const, id: () => productId, patch: () => ({ updated_at: new Date().toISOString() }) },
-		{ table: "orders" as const, id: () => orderId, patch: () => ({ updated_at: new Date().toISOString() }) },
+		// updated_at/status are no longer writable by API roles; notes is.
+		{ table: "orders" as const, id: () => orderId, patch: () => ({ notes: "rls patched" }) },
 		// order_items has no updated_at column (T2 schema) — quantity is the
 		// one real editable column, and still exercises the same UPDATE policy.
 		{ table: "order_items" as const, id: () => orderItemId, patch: () => ({ quantity: 2 }) },
@@ -98,6 +99,15 @@ describe("RLS regression matrix (retroactive T8 coverage)", () =>
 		it("driver is blocked from UPDATE", async () =>
 		{
 			await expectUpdateBlocked(tenant.driver, table, id(), patch());
+		});
+	});
+
+	describe("orders status is not writable directly", () =>
+	{
+		it.each(["admin", "operator", "driver"] as const)("%s cannot UPDATE status", async (role) =>
+		{
+			const { error } = await tenant[role].from("orders").update({ status: "delivered" }).eq("id", orderId);
+			expect(error?.code).toBe("42501");
 		});
 	});
 

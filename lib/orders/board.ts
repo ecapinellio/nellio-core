@@ -72,6 +72,35 @@ export function cardNotes(
 	};
 }
 
+/**
+ * What the assign panel shows and the status it saves against, frozen when it
+ * opens: a refetch must not move `expectedStatus`, or a colleague's change
+ * would be overwritten instead of rejected (PT409).
+ */
+export interface AssignSnapshot
+{
+	id: string;
+	status: string;
+	customerName: string;
+	deliveryDate: string | null;
+	deliveryWindow: string | null;
+}
+
+export function snapshotForAssign(
+	orders: { id: string; status: string; customerName: string; deliveryDate: string | null; deliveryWindow: string | null }[],
+	orderId: string,
+): AssignSnapshot | null
+{
+	const o = orders.find((x) => x.id === orderId);
+	return o ? { id: o.id, status: o.status, customerName: o.customerName, deliveryDate: o.deliveryDate, deliveryWindow: o.deliveryWindow } : null;
+}
+
+/** Keeps the snapshot only while its order is still on the board. */
+export function keepSnapshot(snapshot: AssignSnapshot | null, orders: { id: string }[]): AssignSnapshot | null
+{
+	return snapshot && orders.some((o) => o.id === snapshot.id) ? snapshot : null;
+}
+
 /** Local calendar day as yyyy-mm-dd, what <input type="date"> and orders.delivery_date use. */
 export function localDateString(now: Date): string
 {

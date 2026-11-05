@@ -18,7 +18,7 @@ import { useOrdersLive } from "@/hooks/use-orders-live";
 import { useRefreshOnReturn } from "@/hooks/use-refresh-on-return";
 import { createClient } from "@/lib/supabase/client";
 import { listOrderStatuses, listOrdersForKanban, type KanbanOrder } from "@/lib/supabase/queries";
-import { boardColumns, groupOrdersByColumn } from "@/lib/orders/board";
+import { boardColumns, groupOrdersByColumn, keepSnapshot, snapshotForAssign, type AssignSnapshot } from "@/lib/orders/board";
 import { canOfficeDrag, type OrderStatusDef } from "@/lib/orders/fulfillment";
 import { AssignOrderPanel, type AssignOutcome } from "@/components/orders/assign-order-panel";
 import { KanbanColumn } from "@/components/orders/kanban-column";
@@ -152,7 +152,7 @@ export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 	const [actionError, setActionError] = useState<string | null>(null);
 	const [activeId, setActiveId] = useState<string | null>(null);
 	const [openOrderId, setOpenOrderId] = useState<string | null>(null);
-	const [assignOrderId, setAssignOrderId] = useState<string | null>(null);
+	const [assignTarget, setAssignTarget] = useState<AssignSnapshot | null>(null);
 	const [now, setNow] = useState(() => new Date());
 	const refreshSequence = useRef(0);
 	const dragging = useRef(false);
@@ -216,6 +216,7 @@ export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 			return;
 		}
 		setBoard(next);
+		setAssignTarget((target) => keepSnapshot(target, next.orders));
 		if (!firstLoad)
 		{
 			onOrderChanged?.();
@@ -251,7 +252,11 @@ export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 	const groups = useMemo(() => groupOrdersByColumn(board?.orders ?? [], columns), [board, columns]);
 	const activeOrder = board?.orders.find((order) => order.id === activeId) ?? null;
 	const activeStatus = columns.find((c) => c.key === activeOrder?.status);
-	const assignOrder = board?.orders.find((order) => order.id === assignOrderId) ?? null;
+
+	function openAssign(orderId: string)
+	{
+		setAssignTarget(board ? snapshotForAssign(board.orders, orderId) : null);
+	}
 
 	function handleDragStart(event: DragStartEvent)
 	{
@@ -279,14 +284,14 @@ export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 		const from = columns.find((c) => c.key === order?.status);
 		if (order && from && target && canOfficeDrag(from, target))
 		{
-			setAssignOrderId(order.id);
+			openAssign(order.id);
 		}
 		finishDrag();
 	}
 
 	function handleAssignDone(outcome: AssignOutcome)
 	{
-		setAssignOrderId(null);
+		setAssignTarget(null);
 		if (outcome === "stale")
 		{
 			setActionError(CHANGED_MESSAGE);
@@ -323,7 +328,7 @@ export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 					groups={groups}
 					now={now}
 					error={actionError}
-					onConfirm={setAssignOrderId}
+					onConfirm={openAssign}
 					onOpenDetail={setOpenOrderId}
 				/>
 			</div>
@@ -344,7 +349,7 @@ export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 								orders={groups[status.key]}
 								now={now}
 								accepts={activeStatus !== undefined && canOfficeDrag(activeStatus, status)}
-								onConfirm={setAssignOrderId}
+								onConfirm={openAssign}
 								onOpenDetail={setOpenOrderId}
 							/>
 						))}
@@ -357,9 +362,9 @@ export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 			</div>
 
 			<AssignOrderPanel
-				order={assignOrder}
+				order={assignTarget}
 				mode="confirm"
-				expectedStatus={assignOrder?.status ?? ""}
+				expectedStatus={assignTarget?.status ?? ""}
 				onDone={handleAssignDone}
 			/>
 

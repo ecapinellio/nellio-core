@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_STATUSES, boardColumns, cardNotes, groupOrdersByColumn, localDateString, statusColor } from "@/lib/orders/board";
+import { DEFAULT_STATUSES, boardColumns, cardNotes, groupOrdersByColumn, keepSnapshot, snapshotForAssign, localDateString, statusColor } from "@/lib/orders/board";
 
 const now = new Date("2026-11-05T12:00:00Z");
 const def = (key: string) => DEFAULT_STATUSES.find((s) => s.key === key)!;
@@ -64,5 +64,24 @@ describe("localDateString", () =>
 	it("uses the local calendar day, zero padded", () =>
 	{
 		expect(localDateString(new Date(2026, 0, 5, 23, 59))).toBe("2026-01-05");
+	});
+});
+
+describe("assign snapshot", () =>
+{
+	const order = { id: "a", status: "pending", customerName: "C", deliveryDate: null, deliveryWindow: null };
+
+	it("freezes the status seen at open, whatever the board does later", () =>
+	{
+		const snap = snapshotForAssign([order], "a")!;
+		const refetched = [{ ...order, status: "confirmed" }];
+		expect(keepSnapshot(snap, refetched)?.status).toBe("pending");
+	});
+
+	it("drops the snapshot when the order leaves the board, and for unknown ids", () =>
+	{
+		const snap = snapshotForAssign([order], "a");
+		expect(keepSnapshot(snap, [])).toBeNull();
+		expect(snapshotForAssign([order], "zzz")).toBeNull();
 	});
 });

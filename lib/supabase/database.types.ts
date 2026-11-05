@@ -269,7 +269,76 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "create_order":
+            "assign_order":
+{ Args: { "p_delivery_date": string,"p_delivery_window": string,"p_driver_id": string,"p_expected_status": string,"p_order_id": string }; Returns: {
+              "channel": string,
+"created_at": string,
+"created_by": string | null,
+"customer_id": string,
+"delivery_date": string | null,
+"delivery_window": string | null,
+"driver_id": string | null,
+"id": string,
+"invoice_status": string,
+"notes": string | null,
+"status": string,
+"status_changed_at": string,
+"tenant_id": string,
+"updated_at": string
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "orders"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
+"cancel_order":
+{ Args: { "p_expected_status": string,"p_note": string,"p_order_id": string,"p_reason": string }; Returns: {
+              "channel": string,
+"created_at": string,
+"created_by": string | null,
+"customer_id": string,
+"delivery_date": string | null,
+"delivery_window": string | null,
+"driver_id": string | null,
+"id": string,
+"invoice_status": string,
+"notes": string | null,
+"status": string,
+"status_changed_at": string,
+"tenant_id": string,
+"updated_at": string
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "orders"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
+"correct_order_status":
+{ Args: { "p_expected_status": string,"p_order_id": string,"p_reason": string,"p_status": string }; Returns: {
+              "channel": string,
+"created_at": string,
+"created_by": string | null,
+"customer_id": string,
+"delivery_date": string | null,
+"delivery_window": string | null,
+"driver_id": string | null,
+"id": string,
+"invoice_status": string,
+"notes": string | null,
+"status": string,
+"status_changed_at": string,
+"tenant_id": string,
+"updated_at": string
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "orders"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
+"create_order":
 { Args: { "p_channel"?: string,"p_customer_id": string,"p_items": Json,"p_notes": string }; Returns: Json
                            },
 "get_today_stats":
@@ -280,6 +349,11 @@ isOneToOne: false
                            },
 "is_operator_or_admin":
 { Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"list_tenant_drivers":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "active": boolean,"id": string,"name": string
+            }[]
                            },
 "list_tenant_users":
 { Args: Record<PropertyKey, never>; Returns: {

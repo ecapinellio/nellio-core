@@ -1,522 +1,422 @@
-export type Json =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: Json | undefined }
-  | Json[]
+
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
+  
+  "graphql_public": {
+          Tables: {
+            [_ in never]: never
+          }
+          Views: {
+            [_ in never]: never
+          }
+          Functions: {
+            "graphql":
+{ Args: { "extensions"?: Json,"operationName"?: string,"query"?: string,"variables"?: Json }; Returns: Json
+                           }
+          }
+          Enums: {
+            [_ in never]: never
+          }
+          CompositeTypes: {
+            [_ in never]: never
+          }
+        },"public": {
+          Tables: {
+            "customers": {
+                  Row: {
+                    "active": boolean,"address": string | null,"cod_actividad": string | null,"created_at": string,"desc_actividad": string | null,"email": string | null,"id": string,"legal_name": string | null,"name": string,"nrc": string | null,"phone": string | null,"tax_id": string | null,"tenant_id": string,"updated_at": string,"updated_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "active"?: boolean,"address"?: string | null,"cod_actividad"?: string | null,"created_at"?: string,"desc_actividad"?: string | null,"email"?: string | null,"id"?: string,"legal_name"?: string | null,"name": string,"nrc"?: string | null,"phone"?: string | null,"tax_id"?: string | null,"tenant_id": string,"updated_at"?: string,"updated_by"?: string | null
+                  }
+                  Update: {
+                    "active"?: boolean,"address"?: string | null,"cod_actividad"?: string | null,"created_at"?: string,"desc_actividad"?: string | null,"email"?: string | null,"id"?: string,"legal_name"?: string | null,"name"?: string,"nrc"?: string | null,"phone"?: string | null,"tax_id"?: string | null,"tenant_id"?: string,"updated_at"?: string,"updated_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "customers_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "customers_updated_by_fkey"
+      columns: ["updated_by"]
+isOneToOne: false
+      referencedRelation: "users"
+      referencedColumns: ["id"]
     }
-    Views: {
-      [_ in never]: never
+                  ]
+                },"order_events": {
+                  Row: {
+                    "action": string,"actor_id": string | null,"created_at": string,"from_status": string | null,"id": string,"note": string | null,"order_id": string,"payload": NonNullable<Json>,"reason": string | null,"tenant_id": string,"to_status": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"actor_id"?: string | null,"created_at"?: string,"from_status"?: string | null,"id"?: string,"note"?: string | null,"order_id": string,"payload"?: NonNullable<Json>,"reason"?: string | null,"tenant_id": string,"to_status": string
+                  }
+                  Update: {
+                    "action"?: string,"actor_id"?: string | null,"created_at"?: string,"from_status"?: string | null,"id"?: string,"note"?: string | null,"order_id"?: string,"payload"?: NonNullable<Json>,"reason"?: string | null,"tenant_id"?: string,"to_status"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "order_events_actor_id_fkey"
+      columns: ["actor_id"]
+isOneToOne: false
+      referencedRelation: "users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_events_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_events_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
     }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
+                  ]
+                },"order_items": {
+                  Row: {
+                    "created_at": string,"delivered_quantity": number | null,"id": string,"order_id": string,"price_at_order": number | null,"price_overridden_at": string | null,"price_overridden_by": string | null,"product_id": string,"quantity": number,"shortfall_note": string | null,"shortfall_reason": string | null,"tenant_id": string,"unit_at_order": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"delivered_quantity"?: number | null,"id"?: string,"order_id": string,"price_at_order"?: number | null,"price_overridden_at"?: string | null,"price_overridden_by"?: string | null,"product_id": string,"quantity": number,"shortfall_note"?: string | null,"shortfall_reason"?: string | null,"tenant_id": string,"unit_at_order"?: string | null
+                  }
+                  Update: {
+                    "created_at"?: string,"delivered_quantity"?: number | null,"id"?: string,"order_id"?: string,"price_at_order"?: number | null,"price_overridden_at"?: string | null,"price_overridden_by"?: string | null,"product_id"?: string,"quantity"?: number,"shortfall_note"?: string | null,"shortfall_reason"?: string | null,"tenant_id"?: string,"unit_at_order"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "order_items_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_items_price_overridden_by_fkey"
+      columns: ["price_overridden_by"]
+isOneToOne: false
+      referencedRelation: "users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_items_product_tenant_fkey"
+      columns: ["tenant_id","product_id"]
+isOneToOne: false
+      referencedRelation: "products"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "order_items_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
     }
-    Enums: {
-      [_ in never]: never
+                  ]
+                },"order_statuses": {
+                  Row: {
+                    "category": string,"key": string,"label": string,"position": number,"step": string | null,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "category": string,"key": string,"label": string,"position": number,"step"?: string | null,"tenant_id": string
+                  }
+                  Update: {
+                    "category"?: string,"key"?: string,"label"?: string,"position"?: number,"step"?: string | null,"tenant_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "order_statuses_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
     }
-    CompositeTypes: {
-      [_ in never]: never
+                  ]
+                },"orders": {
+                  Row: {
+                    "channel": string,"created_at": string,"created_by": string | null,"customer_id": string,"delivery_date": string | null,"delivery_window": string | null,"driver_id": string | null,"id": string,"invoice_status": string,"notes": string | null,"status": string,"status_changed_at": string,"tenant_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "channel"?: string,"created_at"?: string,"created_by"?: string | null,"customer_id": string,"delivery_date"?: string | null,"delivery_window"?: string | null,"driver_id"?: string | null,"id"?: string,"invoice_status"?: string,"notes"?: string | null,"status"?: string,"status_changed_at"?: string,"tenant_id": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "channel"?: string,"created_at"?: string,"created_by"?: string | null,"customer_id"?: string,"delivery_date"?: string | null,"delivery_window"?: string | null,"driver_id"?: string | null,"id"?: string,"invoice_status"?: string,"notes"?: string | null,"status"?: string,"status_changed_at"?: string,"tenant_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "orders_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_customer_tenant_fkey"
+      columns: ["tenant_id","customer_id"]
+isOneToOne: false
+      referencedRelation: "customers"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "orders_driver_fkey"
+      columns: ["tenant_id","driver_id"]
+isOneToOne: false
+      referencedRelation: "users"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "orders_status_fkey"
+      columns: ["tenant_id","status"]
+isOneToOne: false
+      referencedRelation: "order_statuses"
+      referencedColumns: ["tenant_id","key"]
+    },{
+      foreignKeyName: "orders_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
     }
-  }
-  public: {
-    Tables: {
-      customers: {
-        Row: {
-          active: boolean
-          address: string | null
-          cod_actividad: string | null
-          created_at: string
-          desc_actividad: string | null
-          email: string | null
-          id: string
-          legal_name: string | null
-          name: string
-          nrc: string | null
-          phone: string | null
-          tax_id: string | null
-          tenant_id: string
-          updated_at: string
-          updated_by: string | null
-        }
-        ComputedFields: never
-        Insert: {
-          active?: boolean
-          address?: string | null
-          cod_actividad?: string | null
-          created_at?: string
-          desc_actividad?: string | null
-          email?: string | null
-          id?: string
-          legal_name?: string | null
-          name: string
-          nrc?: string | null
-          phone?: string | null
-          tax_id?: string | null
-          tenant_id: string
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Update: {
-          active?: boolean
-          address?: string | null
-          cod_actividad?: string | null
-          created_at?: string
-          desc_actividad?: string | null
-          email?: string | null
-          id?: string
-          legal_name?: string | null
-          name?: string
-          nrc?: string | null
-          phone?: string | null
-          tax_id?: string | null
-          tenant_id?: string
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "customers_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "customers_updated_by_fkey"
-            columns: ["updated_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      order_items: {
-        Row: {
-          created_at: string
-          id: string
-          order_id: string
-          price_at_order: number | null
-          price_overridden_at: string | null
-          price_overridden_by: string | null
-          product_id: string
-          quantity: number
-          tenant_id: string
-          unit_at_order: string | null
-        }
-        ComputedFields: never
-        Insert: {
-          created_at?: string
-          id?: string
-          order_id: string
-          price_at_order?: number | null
-          price_overridden_at?: string | null
-          price_overridden_by?: string | null
-          product_id: string
-          quantity: number
-          tenant_id: string
-          unit_at_order?: string | null
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          order_id?: string
-          price_at_order?: number | null
-          price_overridden_at?: string | null
-          price_overridden_by?: string | null
-          product_id?: string
-          quantity?: number
-          tenant_id?: string
-          unit_at_order?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "order_items_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "orders"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "order_items_price_overridden_by_fkey"
-            columns: ["price_overridden_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "order_items_product_tenant_fkey"
-            columns: ["tenant_id", "product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "order_items_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      orders: {
-        Row: {
-          channel: string
-          created_at: string
-          created_by: string | null
-          customer_id: string
-          id: string
-          notes: string | null
-          status: string
-          tenant_id: string
-          updated_at: string
-        }
-        ComputedFields: never
-        Insert: {
-          channel?: string
-          created_at?: string
-          created_by?: string | null
-          customer_id: string
-          id?: string
-          notes?: string | null
-          status?: string
-          tenant_id: string
-          updated_at?: string
-        }
-        Update: {
-          channel?: string
-          created_at?: string
-          created_by?: string | null
-          customer_id?: string
-          id?: string
-          notes?: string | null
-          status?: string
-          tenant_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "orders_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "orders_customer_tenant_fkey"
-            columns: ["tenant_id", "customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["tenant_id", "id"]
-          },
-          {
-            foreignKeyName: "orders_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      products: {
-        Row: {
-          active: boolean
-          created_at: string
-          id: string
-          name: string
-          price_per_unit: number | null
-          tenant_id: string
-          unit: string | null
-          updated_at: string
-          updated_by: string | null
-        }
-        ComputedFields: never
-        Insert: {
-          active?: boolean
-          created_at?: string
-          id?: string
-          name: string
-          price_per_unit?: number | null
-          tenant_id: string
-          unit?: string | null
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Update: {
-          active?: boolean
-          created_at?: string
-          id?: string
-          name?: string
-          price_per_unit?: number | null
-          tenant_id?: string
-          unit?: string | null
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "products_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "products_updated_by_fkey"
-            columns: ["updated_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      tenants: {
-        Row: {
-          address: string | null
-          cod_actividad: string | null
-          commercial_name: string | null
-          created_at: string
-          desc_actividad: string | null
-          email: string | null
-          id: string
-          name: string
-          nit: string | null
-          nrc: string | null
-          phone: string | null
-        }
-        ComputedFields: never
-        Insert: {
-          address?: string | null
-          cod_actividad?: string | null
-          commercial_name?: string | null
-          created_at?: string
-          desc_actividad?: string | null
-          email?: string | null
-          id?: string
-          name: string
-          nit?: string | null
-          nrc?: string | null
-          phone?: string | null
-        }
-        Update: {
-          address?: string | null
-          cod_actividad?: string | null
-          commercial_name?: string | null
-          created_at?: string
-          desc_actividad?: string | null
-          email?: string | null
-          id?: string
-          name?: string
-          nit?: string | null
-          nrc?: string | null
-          phone?: string | null
-        }
-        Relationships: []
-      }
-      users: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          id: string
-          name: string
-          role: string
-          tenant_id: string
-        }
-        ComputedFields: never
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          id: string
-          name: string
-          role: string
-          tenant_id: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          name?: string
-          role?: string
-          tenant_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "users_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+                  ]
+                },"products": {
+                  Row: {
+                    "active": boolean,"created_at": string,"id": string,"name": string,"price_per_unit": number | null,"tenant_id": string,"unit": string | null,"updated_at": string,"updated_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "active"?: boolean,"created_at"?: string,"id"?: string,"name": string,"price_per_unit"?: number | null,"tenant_id": string,"unit"?: string | null,"updated_at"?: string,"updated_by"?: string | null
+                  }
+                  Update: {
+                    "active"?: boolean,"created_at"?: string,"id"?: string,"name"?: string,"price_per_unit"?: number | null,"tenant_id"?: string,"unit"?: string | null,"updated_at"?: string,"updated_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "products_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "products_updated_by_fkey"
+      columns: ["updated_by"]
+isOneToOne: false
+      referencedRelation: "users"
+      referencedColumns: ["id"]
     }
-    Views: {
-      [_ in never]: never
+                  ]
+                },"tenant_order_settings": {
+                  Row: {
+                    "require_driver_acceptance": boolean,"require_photo": boolean,"require_receiver_name": boolean,"require_signature": boolean,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "require_driver_acceptance"?: boolean,"require_photo"?: boolean,"require_receiver_name"?: boolean,"require_signature"?: boolean,"tenant_id": string
+                  }
+                  Update: {
+                    "require_driver_acceptance"?: boolean,"require_photo"?: boolean,"require_receiver_name"?: boolean,"require_signature"?: boolean,"tenant_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "tenant_order_settings_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: true
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
     }
-    Functions: {
-      create_order: {
-        Args: {
-          p_channel?: string
-          p_customer_id: string
-          p_items: Json
-          p_notes: string
-        }
-        Returns: Json
-      }
-      get_today_stats: {
-        Args: { p_day_end: string; p_day_start: string }
-        Returns: Json
-      }
-      immutable_unaccent: { Args: { "": string }; Returns: string }
-      is_operator_or_admin: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      list_tenant_users: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          banned_until: string
-          created_at: string
-          created_by: string
-          email: string
-          id: string
-          name: string
-          role: string
-        }[]
-      }
-      normalize_name: { Args: { p_name: string }; Returns: string }
-      normalize_nrc: { Args: { p_value: string }; Returns: string }
-      normalize_tax_id: { Args: { p_value: string }; Returns: string }
-      quick_add_customer: {
-        Args: { p_name: string }
-        Returns: {
-          active: boolean
-          address: string | null
-          cod_actividad: string | null
-          created_at: string
-          desc_actividad: string | null
-          email: string | null
-          id: string
-          legal_name: string | null
-          name: string
-          nrc: string | null
-          phone: string | null
-          tax_id: string | null
-          tenant_id: string
-          updated_at: string
-          updated_by: string | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "customers"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      quick_add_product: {
-        Args: { p_name: string; p_price_per_unit?: number; p_unit?: string }
-        Returns: {
-          active: boolean
-          created_at: string
-          id: string
-          name: string
-          price_per_unit: number | null
-          tenant_id: string
-          unit: string | null
-          updated_at: string
-          updated_by: string | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "products"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      role: { Args: Record<PropertyKey, never>; Returns: string }
-      save_customers: { Args: { p_rows: Json }; Returns: Json }
-      save_products: { Args: { p_rows: Json }; Returns: Json }
-      search_customers: {
-        Args: { p_limit?: number; p_query: string }
-        Returns: {
-          active: boolean
-          address: string | null
-          cod_actividad: string | null
-          created_at: string
-          desc_actividad: string | null
-          email: string | null
-          id: string
-          legal_name: string | null
-          name: string
-          nrc: string | null
-          phone: string | null
-          tax_id: string | null
-          tenant_id: string
-          updated_at: string
-          updated_by: string | null
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "customers"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
-      search_products: {
-        Args: { p_limit?: number; p_query: string }
-        Returns: {
-          active: boolean
-          created_at: string
-          id: string
-          name: string
-          price_per_unit: number | null
-          tenant_id: string
-          unit: string | null
-          updated_at: string
-          updated_by: string | null
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "products"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
-      tenant_id: { Args: Record<PropertyKey, never>; Returns: string }
-      update_order_detail: {
-        Args: {
-          p_expected?: Json
-          p_notes: string
-          p_order_id: string
-          p_price_updates: Json
-        }
-        Returns: Json
-      }
+                  ]
+                },"tenants": {
+                  Row: {
+                    "address": string | null,"cod_actividad": string | null,"commercial_name": string | null,"created_at": string,"desc_actividad": string | null,"email": string | null,"id": string,"name": string,"nit": string | null,"nrc": string | null,"phone": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "address"?: string | null,"cod_actividad"?: string | null,"commercial_name"?: string | null,"created_at"?: string,"desc_actividad"?: string | null,"email"?: string | null,"id"?: string,"name": string,"nit"?: string | null,"nrc"?: string | null,"phone"?: string | null
+                  }
+                  Update: {
+                    "address"?: string | null,"cod_actividad"?: string | null,"commercial_name"?: string | null,"created_at"?: string,"desc_actividad"?: string | null,"email"?: string | null,"id"?: string,"name"?: string,"nit"?: string | null,"nrc"?: string | null,"phone"?: string | null
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"users": {
+                  Row: {
+                    "created_at": string,"created_by": string | null,"id": string,"name": string,"role": string,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"created_by"?: string | null,"id": string,"name": string,"role": string,"tenant_id": string
+                  }
+                  Update: {
+                    "created_at"?: string,"created_by"?: string | null,"id"?: string,"name"?: string,"role"?: string,"tenant_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "users_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
     }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
+                  ]
+                }
+          }
+          Views: {
+            [_ in never]: never
+          }
+          Functions: {
+            "create_order":
+{ Args: { "p_channel"?: string,"p_customer_id": string,"p_items": Json,"p_notes": string }; Returns: Json
+                           },
+"get_today_stats":
+{ Args: { "p_day_end": string,"p_day_start": string }; Returns: Json
+                           },
+"immutable_unaccent":
+{ Args: { "": string }; Returns: string
+                           },
+"is_operator_or_admin":
+{ Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"list_tenant_users":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "banned_until": string,"created_at": string,"created_by": string,"email": string,"id": string,"name": string,"role": string
+            }[]
+                           },
+"log_order_event":
+{ Args: { "p_action": string,"p_from": string,"p_note": string,"p_order": Omit<Database["public"]['Tables']["orders"]['Row'], Database["public"]['Tables']["orders"]['ComputedFields']>,"p_payload": Json,"p_reason": string }; Returns: undefined
+                           },
+"normalize_name":
+{ Args: { "p_name": string }; Returns: string
+                           },
+"normalize_nrc":
+{ Args: { "p_value": string }; Returns: string
+                           },
+"normalize_tax_id":
+{ Args: { "p_value": string }; Returns: string
+                           },
+"order_category":
+{ Args: { "p_status": string,"p_tenant_id": string }; Returns: string
+                           },
+"order_status_for_step":
+{ Args: { "p_step": string,"p_tenant_id": string }; Returns: string
+                           },
+"quick_add_customer":
+{ Args: { "p_name": string }; Returns: {
+              "active": boolean,
+"address": string | null,
+"cod_actividad": string | null,
+"created_at": string,
+"desc_actividad": string | null,
+"email": string | null,
+"id": string,
+"legal_name": string | null,
+"name": string,
+"nrc": string | null,
+"phone": string | null,
+"tax_id": string | null,
+"tenant_id": string,
+"updated_at": string,
+"updated_by": string | null
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "customers"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
+"quick_add_product":
+{ Args: { "p_name": string,"p_price_per_unit"?: number,"p_unit"?: string }; Returns: {
+              "active": boolean,
+"created_at": string,
+"id": string,
+"name": string,
+"price_per_unit": number | null,
+"tenant_id": string,
+"unit": string | null,
+"updated_at": string,
+"updated_by": string | null
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "products"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
+"role":
+{ Args: Record<PropertyKey, never>; Returns: string
+                           },
+"save_customers":
+{ Args: { "p_rows": Json }; Returns: Json
+                           },
+"save_products":
+{ Args: { "p_rows": Json }; Returns: Json
+                           },
+"search_customers":
+{ Args: { "p_limit"?: number,"p_query": string }; Returns: {
+              "active": boolean,
+"address": string | null,
+"cod_actividad": string | null,
+"created_at": string,
+"desc_actividad": string | null,
+"email": string | null,
+"id": string,
+"legal_name": string | null,
+"name": string,
+"nrc": string | null,
+"phone": string | null,
+"tax_id": string | null,
+"tenant_id": string,
+"updated_at": string,
+"updated_by": string | null
+            }[]
+                          SetofOptions: {
+        from: "*"
+        to: "customers"
+        isOneToOne: false
+        isSetofReturn: true
+      } },
+"search_products":
+{ Args: { "p_limit"?: number,"p_query": string }; Returns: {
+              "active": boolean,
+"created_at": string,
+"id": string,
+"name": string,
+"price_per_unit": number | null,
+"tenant_id": string,
+"unit": string | null,
+"updated_at": string,
+"updated_by": string | null
+            }[]
+                          SetofOptions: {
+        from: "*"
+        to: "products"
+        isOneToOne: false
+        isSetofReturn: true
+      } },
+"seed_order_statuses":
+{ Args: { "p_tenant_id": string }; Returns: undefined
+                           },
+"tenant_id":
+{ Args: Record<PropertyKey, never>; Returns: string
+                           },
+"update_order_detail":
+{ Args: { "p_expected"?: Json,"p_notes": string,"p_order_id": string,"p_price_updates": Json }; Returns: Json
+                           }
+          }
+          Enums: {
+            [_ in never]: never
+          }
+          CompositeTypes: {
+            [_ in never]: never
+          }
+        }
 }
 
-type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+type DatabaseWithoutInternals = Omit<Database, '__InternalSupabase'>
 
 type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
@@ -529,25 +429,21 @@ export type Tables<
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+    : never = never
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
       DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
-        Row: infer R
-      }
-      ? R
-      : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+  ? (DefaultSchema["Tables"] & DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+      Row: infer R
+    }
+    ? R
     : never
+  : never
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
@@ -557,22 +453,20 @@ export type TablesInsert<
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+    : never = never
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I
     : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Insert: infer I
-      }
-      ? I
-      : never
+  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+      Insert: infer I
+    }
+    ? I
     : never
+  : never
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
@@ -582,22 +476,20 @@ export type TablesUpdate<
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+    : never = never
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U
     : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Update: infer U
-      }
-      ? U
-      : never
+  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+      Update: infer U
+    }
+    ? U
     : never
+  : never
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
@@ -607,14 +499,12 @@ export type Enums<
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
-> = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+    : never = never
+> = DefaultSchemaEnumNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
-    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-    : never
+  ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+  : never
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
@@ -624,20 +514,21 @@ export type CompositeTypes<
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
-> = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+    : never = never
+> = PublicCompositeTypeNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never
+  ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+  : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
-  public: {
-    Enums: {},
-  },
+  "graphql_public": {
+          Enums: {
+            
+          }
+        },"public": {
+          Enums: {
+            
+          }
+        }
 } as const

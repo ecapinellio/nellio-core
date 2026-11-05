@@ -61,7 +61,9 @@ function DeliveryForm({
 {
 	const supabase = useMemo(() => createClient(), []);
 	// Created once per opening and reused on every retry: the server treats a repeat as a no-op.
-	const [deliveryId] = useState(() => crypto.randomUUID());
+	// A changed proof rotates it (see changeProof).
+	const [firstId] = useState(() => crypto.randomUUID());
+	const proofs = useRef({ deliveryId: firstId, uploaded: {} as { signature?: string; photo?: string } });
 	const [lines, setLines] = useState(() => initialLines(order.items));
 	const [receiverName, setReceiverName] = useState("");
 	const [signature, setSignature] = useState<Blob | null>(null);
@@ -70,8 +72,19 @@ function DeliveryForm({
 	const [amount, setAmount] = useState("");
 	const [submitting, setSubmitting] = useState(false);
 	const [errors, setErrors] = useState<string[]>([]);
-	// Proofs already in the bucket, so a retry doesn't upload again.
-	const uploaded = useRef<{ signature?: string; photo?: string }>({});
+
+	// Proofs are immutable at their path: if one changes after anything was
+	// uploaded, start over under a new id so both go up fresh. Safe: if the
+	// earlier attempt had saved, the order is no longer picked up and the
+	// server rejects the retry.
+	function changeProof()
+	{
+		if (proofs.current.uploaded.signature || proofs.current.uploaded.photo)
+		{
+			proofs.current.deliveryId = crypto.randomUUID();
+			proofs.current.uploaded = {};
+		}
+	}
 
 	const outcome = deliveryOutcome(lines);
 
@@ -88,7 +101,7 @@ function DeliveryForm({
 		}
 		try
 		{
-			uploaded.current.photo = undefined;
+			changeProof();
 			setPhoto(await downscalePhoto(file));
 		}
 		catch
@@ -104,18 +117,18 @@ function DeliveryForm({
 		{
 			return { path: null };
 		}
-		if (uploaded.current[kind])
+		if (proofs.current.uploaded[kind])
 		{
-			return { path: uploaded.current[kind]! };
+			return { path: proofs.current.uploaded[kind]! };
 		}
-		const { data, error } = await uploadDeliveryProof(supabase, tenantId, deliveryId, kind, blob);
+		const { data, error } = await uploadDeliveryProof(supabase, tenantId, proofs.current.deliveryId, kind, blob);
 		if (error && !isAlreadyUploaded(error.message))
 		{
 			return { path: null, failure: isNetworkError(error.message, navigator.onLine) ? OFFLINE_ERROR : GENERIC_ERROR };
 		}
-		// shortcut: a proof changed after a partial success keeps the first upload (paths are immutable), fine until proofs can be replaced.
-		const path = data ?? `${tenantId}/${deliveryId}/${kind === "signature" ? "signature.png" : "photo.jpg"}`;
-		uploaded.current[kind] = path;
+		// "Already exists" = our own earlier upload (a changed proof rotated the id).
+		const path = data ?? `${tenantId}/${proofs.current.deliveryId}/${kind === "signature" ? "signature.png" : "photo.jpg"}`;
+		proofs.current.uploaded[kind] = path;
 		return { path };
 	}
 
@@ -143,8 +156,8 @@ function DeliveryForm({
 			}
 
 			const { error } = await recordDelivery(supabase, order.id, {
-				deliveryId,
-				outcome: outcome === "partially_delivered" ? "partially_delivered" : "delivered",
+				deliveryId: proofs.current.deliveryId,
+				outcome: "delivered",
 				lines: linesForRpc(lines),
 				receiverName: receiverName.trim() || null,
 				signaturePath: sig.path,
@@ -231,7 +244,7 @@ function DeliveryForm({
 					<SignaturePad
 						onChange={(blob) =>
 						{
-							uploaded.current.signature = undefined;
+							changeProof();
 							setSignature(blob);
 						}}
 					/>

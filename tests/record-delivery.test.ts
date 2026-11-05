@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { setupTenant, type TestTenant } from "@/tests/fixtures";
+import { recordDelivery } from "@/lib/orders/actions-client";
 import { createOrder, quickAddCustomer, quickAddProduct } from "@/lib/supabase/queries";
 
 const PNG = Buffer.from(
@@ -155,6 +156,21 @@ describe("record_delivery", () =>
 		{
 			await setSettings({ require_signature: true, require_receiver_name: true });
 		}
+	});
+
+	it("recordDelivery() wrapper: a short line becomes partially_delivered on the server", async () =>
+	{
+		const { id, items } = await pickedUp([10]);
+		const deliveryId = crypto.randomUUID();
+		const r = await recordDelivery(tenant.driver, id, {
+			deliveryId,
+			outcome: "delivered",
+			lines: [{ orderItemId: items[0].id, deliveredQuantity: 4, reason: "short" }],
+			receiverName: "Ana", signaturePath: await upload(deliveryId), photoPath: null,
+			failureReason: null, failureNote: null, paymentMethod: null, amountCollected: null,
+		});
+		expect(r.error).toBeNull();
+		expect(r.data).toMatchObject({ order: { status: "partially_delivered" }, delivery: { outcome: "partially_delivered" } });
 	});
 
 	it("partial delivery stores delivered quantities and reasons -> partially_delivered", async () =>

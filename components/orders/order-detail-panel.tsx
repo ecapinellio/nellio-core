@@ -15,6 +15,7 @@ import { CancelOrderDialog, type ActionOutcome } from "@/components/orders/cance
 import { CorrectStatusDialog } from "@/components/orders/correct-status-dialog";
 import { DeliveryProof } from "@/components/orders/delivery-proof";
 import { OrderTimeline } from "@/components/orders/order-timeline";
+import { TrackingLink } from "@/components/orders/tracking-link";
 import {
 	Dialog,
 	DialogContent,
@@ -452,6 +453,8 @@ export function OrderDetailPanel({ orderId, onClose, onSaved, isAdmin }: OrderDe
 											</Alert>
 										)
 										: null}
+
+									<TrackingLink token={detail.trackingToken} customerEmail={detail.customerEmail} />
 
 									<div className="flex flex-col gap-3 border-t border-border pt-3">
 										<Label>Historial</Label>

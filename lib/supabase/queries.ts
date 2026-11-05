@@ -462,6 +462,9 @@ export interface OrderDetail
 	customerId: string;
 	customerName: string;
 	customerPhone: string | null;
+	customerEmail: string | null;
+	/** Public /t/<token> link for the customer (ADR-008). */
+	trackingToken: string;
 	items: OrderDetailItem[];
 	driver: string | null;
 	deliveryDate: string | null;
@@ -499,8 +502,8 @@ export interface OrderDetailDelivery
 }
 
 const ORDER_DETAIL_SELECT = "id, status, customer_id, channel, notes, created_at, updated_at, " +
-	"delivery_date, delivery_window, invoice_status, " +
-	"customers(name, phone), users!orders_driver_fkey(name), " +
+	"delivery_date, delivery_window, invoice_status, tracking_token, " +
+	"customers(name, phone, email), users!orders_driver_fkey(name), " +
 	"order_events(action, from_status, to_status, reason, note, payload, created_at, users(name)), " +
 	"order_deliveries(outcome, receiver_name, signature_path, photo_path, failure_reason, failure_note, payment_method, amount_collected, created_at), " +
 	"order_items(id, product_id, delivered_quantity, shortfall_reason, shortfall_note, quantity, price_at_order, unit_at_order, price_overridden_by, price_overridden_at, " +
@@ -518,7 +521,8 @@ interface OrderDetailRow
 	delivery_date: string | null;
 	delivery_window: string | null;
 	invoice_status: string;
-	customers: { name: string; phone: string | null } | null;
+	tracking_token: string;
+	customers: { name: string; phone: string | null; email: string | null } | null;
 	users: { name: string } | null;
 	order_events: {
 		action: string;
@@ -627,6 +631,8 @@ export async function getOrderDetail(supabase: Client, orderId: string): Promise
 		customerId: row.customer_id,
 		customerName: row.customers?.name ?? "—",
 		customerPhone: row.customers?.phone ?? null,
+		customerEmail: row.customers?.email ?? null,
+		trackingToken: row.tracking_token,
 		driver: row.users?.name ?? null,
 		deliveryDate: row.delivery_date,
 		deliveryWindow: row.delivery_window,

@@ -151,6 +151,38 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"order_notifications": {
+                  Row: {
+                    "attempts": number,"created_at": string,"event_id": string,"id": string,"kind": string,"last_error": string | null,"next_attempt_at": string,"order_id": string,"recipient": string,"sent_at": string | null,"status": string,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attempts"?: number,"created_at"?: string,"event_id": string,"id"?: string,"kind": string,"last_error"?: string | null,"next_attempt_at"?: string,"order_id": string,"recipient": string,"sent_at"?: string | null,"status"?: string,"tenant_id": string
+                  }
+                  Update: {
+                    "attempts"?: number,"created_at"?: string,"event_id"?: string,"id"?: string,"kind"?: string,"last_error"?: string | null,"next_attempt_at"?: string,"order_id"?: string,"recipient"?: string,"sent_at"?: string | null,"status"?: string,"tenant_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "order_notifications_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: true
+      referencedRelation: "order_events"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_notifications_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_notifications_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"order_statuses": {
                   Row: {
                     "category": string,"key": string,"label": string,"position": number,"step": string | null,"tenant_id": string
@@ -173,14 +205,14 @@ isOneToOne: false
                   ]
                 },"orders": {
                   Row: {
-                    "channel": string,"created_at": string,"created_by": string | null,"customer_id": string,"delivery_date": string | null,"delivery_window": string | null,"driver_id": string | null,"id": string,"invoice_status": string,"notes": string | null,"status": string,"status_changed_at": string,"tenant_id": string,"updated_at": string
+                    "channel": string,"created_at": string,"created_by": string | null,"customer_id": string,"delivery_date": string | null,"delivery_window": string | null,"driver_id": string | null,"id": string,"invoice_status": string,"notes": string | null,"status": string,"status_changed_at": string,"tenant_id": string,"tracking_token": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "channel"?: string,"created_at"?: string,"created_by"?: string | null,"customer_id": string,"delivery_date"?: string | null,"delivery_window"?: string | null,"driver_id"?: string | null,"id"?: string,"invoice_status"?: string,"notes"?: string | null,"status"?: string,"status_changed_at"?: string,"tenant_id": string,"updated_at"?: string
+                    "channel"?: string,"created_at"?: string,"created_by"?: string | null,"customer_id": string,"delivery_date"?: string | null,"delivery_window"?: string | null,"driver_id"?: string | null,"id"?: string,"invoice_status"?: string,"notes"?: string | null,"status"?: string,"status_changed_at"?: string,"tenant_id": string,"tracking_token"?: string,"updated_at"?: string
                   }
                   Update: {
-                    "channel"?: string,"created_at"?: string,"created_by"?: string | null,"customer_id"?: string,"delivery_date"?: string | null,"delivery_window"?: string | null,"driver_id"?: string | null,"id"?: string,"invoice_status"?: string,"notes"?: string | null,"status"?: string,"status_changed_at"?: string,"tenant_id"?: string,"updated_at"?: string
+                    "channel"?: string,"created_at"?: string,"created_by"?: string | null,"customer_id"?: string,"delivery_date"?: string | null,"delivery_window"?: string | null,"driver_id"?: string | null,"id"?: string,"invoice_status"?: string,"notes"?: string | null,"status"?: string,"status_changed_at"?: string,"tenant_id"?: string,"tracking_token"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -243,14 +275,14 @@ isOneToOne: false
                   ]
                 },"tenant_order_settings": {
                   Row: {
-                    "require_driver_acceptance": boolean,"require_photo": boolean,"require_receiver_name": boolean,"require_signature": boolean,"tenant_id": string
+                    "customer_email_actions": (string)[],"require_driver_acceptance": boolean,"require_photo": boolean,"require_receiver_name": boolean,"require_signature": boolean,"tenant_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "require_driver_acceptance"?: boolean,"require_photo"?: boolean,"require_receiver_name"?: boolean,"require_signature"?: boolean,"tenant_id": string
+                    "customer_email_actions"?: (string)[],"require_driver_acceptance"?: boolean,"require_photo"?: boolean,"require_receiver_name"?: boolean,"require_signature"?: boolean,"tenant_id": string
                   }
                   Update: {
-                    "require_driver_acceptance"?: boolean,"require_photo"?: boolean,"require_receiver_name"?: boolean,"require_signature"?: boolean,"tenant_id"?: string
+                    "customer_email_actions"?: (string)[],"require_driver_acceptance"?: boolean,"require_photo"?: boolean,"require_receiver_name"?: boolean,"require_signature"?: boolean,"tenant_id"?: string
                   }
                   Relationships: [
                     {
@@ -316,6 +348,7 @@ isOneToOne: false
 "status": string,
 "status_changed_at": string,
 "tenant_id": string,
+"tracking_token": string,
 "updated_at": string
             }
                           SetofOptions: {
@@ -339,6 +372,7 @@ isOneToOne: false
 "status": string,
 "status_changed_at": string,
 "tenant_id": string,
+"tracking_token": string,
 "updated_at": string
             }
                           SetofOptions: {
@@ -346,6 +380,27 @@ isOneToOne: false
         to: "orders"
         isOneToOne: true
         isSetofReturn: false
+      } },
+"claim_order_notifications":
+{ Args: { "p_limit": number }; Returns: {
+              "attempts": number,
+"created_at": string,
+"event_id": string,
+"id": string,
+"kind": string,
+"last_error": string | null,
+"next_attempt_at": string,
+"order_id": string,
+"recipient": string,
+"sent_at": string | null,
+"status": string,
+"tenant_id": string
+            }[]
+                          SetofOptions: {
+        from: "*"
+        to: "order_notifications"
+        isOneToOne: false
+        isSetofReturn: true
       } },
 "correct_order_status":
 { Args: { "p_expected_status": string,"p_order_id": string,"p_reason": string,"p_status": string }; Returns: {
@@ -362,6 +417,7 @@ isOneToOne: false
 "status": string,
 "status_changed_at": string,
 "tenant_id": string,
+"tracking_token": string,
 "updated_at": string
             }
                           SetofOptions: {
@@ -372,6 +428,9 @@ isOneToOne: false
       } },
 "create_order":
 { Args: { "p_channel"?: string,"p_customer_id": string,"p_items": Json,"p_notes": string }; Returns: Json
+                           },
+"get_order_tracking":
+{ Args: { "p_token": string }; Returns: Json
                            },
 "get_today_stats":
 { Args: { "p_day_end": string,"p_day_start": string }; Returns: Json
@@ -428,6 +487,7 @@ isOneToOne: false
 "status": string,
 "status_changed_at": string,
 "tenant_id": string,
+"tracking_token": string,
 "updated_at": string
             }[]
                           SetofOptions: {
@@ -496,6 +556,7 @@ isOneToOne: false
 "status": string,
 "status_changed_at": string,
 "tenant_id": string,
+"tracking_token": string,
 "updated_at": string
             }
                           SetofOptions: {

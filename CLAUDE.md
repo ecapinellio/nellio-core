@@ -68,6 +68,7 @@ de la app.
 - `order_events` — historial de cada pedido (quién, qué, cuándo).
 - `order_deliveries` — cada intento de entrega: resultado (entregada / parcial /
   fallida), firma, receptor, foto y cobro.
+- `order_notifications` — cola de correos al cliente (ADR-013).
 
 ### Pendiente de modelar (después del discovery con Milo y Alejandra)
 - Inventario / stock / movimientos de inventario / bodegas
@@ -216,6 +217,23 @@ busca su estado por `step` (`order_status_for_step()`), nunca por clave ni por
 nombre. Las políticas de lectura del chofer filtran por `category`. Pendiente:
 pantalla para editar los estados (TODOS, fase 5).
 
+### ADR-013: Correos al cliente por cola + cron; seguimiento público por token
+**Decisión:** un trigger en `order_events` encola en `order_notifications`
+(misma transacción) un correo por paso que le importa al cliente; la ruta
+`/api/cron/notifications` (Vercel Cron cada 5 min, `CRON_SECRET`) los manda
+por Resend (`RESEND_API_KEY`, `EMAIL_FROM`) con hasta 5 intentos. La página
+`/t/<token>` lee `get_order_tracking()` (security definer, `anon`), que
+devuelve solo lo que el cliente puede ver.
+**Por qué:** un correo que falla nunca puede bloquear ni deshacer un cambio
+de estado (spec §2), y las transiciones se llaman desde el navegador, así que
+no hay un servidor propio donde enviar "después". El token
+(`orders.tracking_token`, 244 bits) evita login de clientes (ADR-008).
+**Consecuencias:** el correo se arma al enviarse, con los datos de ese
+momento. Qué acciones mandan correo: `tenant_order_settings.customer_email_actions`.
+El trigger se traga sus propios errores (`raise warning`). El link muere 30
+días después de entregado/cancelado. Sin `RESEND_API_KEY` la cola espera.
+`proxy.ts` excluye `t/` y `api/cron/`. Requiere plan Pro de Vercel (cron cada 5 min).
+
 ---
 
 ## Vistas del frontend por rol (Fase 1)
@@ -325,7 +343,9 @@ eventos por tenant, aislamiento, revocación), y el proceso de entrega
 (modelo de estados y privilegios por columna, candados, transiciones de oficina,
 `list_driver_orders()` / `respond_to_assignment()`, `record_delivery()` con
 parciales y fallidas, estadísticas por categoría, y la lógica pura de
-`lib/orders/` (fulfillment, delivery-form, driver-orders)).
+`lib/orders/` (fulfillment, delivery-form, driver-orders)), y los correos
+al cliente y el seguimiento público (cola por evento, envío con reintentos,
+`get_order_tracking()` y su caducidad).
 
 **CI:** `.github/workflows/test.yml` corre la suite en cada push/PR contra un
 stack de Supabase local efímero (sin secrets — son las keys demo locales).

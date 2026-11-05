@@ -179,7 +179,7 @@ flow shipping first — there's no real data to reconcile until then.
 
 ## Fulfillment (order-to-delivery)
 
-### Phase 2: customer emails and tracking page
+### ~~Phase 2: customer emails and tracking page~~ (done 2026-11-05, ADR-013)
 
 **What:** Emails to the customer at key steps plus a public tracking page per order.
 
@@ -190,6 +190,23 @@ flow shipping first — there's no real data to reconcile until then.
 **Effort:** L
 **Priority:** P2
 **Depends on:** Fulfillment phase 1 shipped.
+
+### Turn on customer emails in production (Resend + Vercel setup)
+
+**What:** The code for phase 2 is live, but no email goes out until this is configured:
+- [ ] Resend: create the account, add and verify the sending domain (DNS records), create an API key.
+- [ ] Vercel env vars (Production): `RESEND_API_KEY`, `EMAIL_FROM` (e.g. `pedidos@<domain>`), `CRON_SECRET` (long random string), optionally `APP_URL` (defaults to the Vercel production domain).
+- [ ] Vercel plan is Pro (the cron runs every 5 min; Hobby only allows daily).
+- [ ] `supabase db push` for `20261106100000_customer_notifications.sql`.
+- [ ] Smoke test: create an order for a customer with your email, wait ≤5 min, check the email and the `/t/…` link.
+
+**Why:** Without `RESEND_API_KEY` the queue just waits; once configured, every pending email goes out at once (old ones included).
+
+**Context:** ADR-013, `.env.example`.
+
+**Effort:** S
+**Priority:** P1
+**Depends on:** Fulfillment phase 2 deployed.
 
 ### Phase 3: deliveries without signal
 

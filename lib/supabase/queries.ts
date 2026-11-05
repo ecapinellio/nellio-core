@@ -2,6 +2,7 @@ import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json, Tables } from "@/lib/supabase/database.types";
 import type { OrderStatus } from "@/lib/order-math";
 import type { ProductUnit } from "@/lib/products/units";
+import type { OrderStatusDef } from "@/lib/orders/fulfillment";
 
 export type Customer = Tables<"customers">;
 export type Product = Tables<"products">;
@@ -322,20 +323,48 @@ export interface KanbanOrder
 	createdAt: string;
 	customerName: string;
 	items: KanbanOrderItem[];
+	driverName: string | null;
+	deliveryDate: string | null;
+	deliveryWindow: string | null;
+	statusChangedAt: string;
+	/** How many times a driver has picked this order up (a failed delivery can be retried). */
+	attempt: number;
 }
 
 /** Terminal state (delivered) accumulates forever — the historial page (listOrders()) covers anything beyond this cap. */
 const DELIVERED_KANBAN_LIMIT = 50;
 
-const KANBAN_SELECT = "id, status, created_at, customers(name), order_items(quantity, price_at_order, products(name))";
+const KANBAN_SELECT = "id, status, created_at, delivery_date, delivery_window, status_changed_at, " +
+	"customers(name), users!orders_driver_fkey(name), order_events(count), " +
+	"order_items(quantity, price_at_order, products(name))";
 
 interface KanbanOrderRow
 {
 	id: string;
 	status: string;
 	created_at: string;
+	delivery_date: string | null;
+	delivery_window: string | null;
+	status_changed_at: string;
 	customers: { name: string } | null;
+	users: { name: string } | null;
+	order_events: { count: number }[];
 	order_items: { quantity: number; price_at_order: number | null; products: { name: string } | null }[];
+}
+
+export async function listOrderStatuses(supabase: Client): Promise<QueryResult<OrderStatusDef[]>>
+{
+	const { data, error } = await supabase
+		.from("order_statuses")
+		.select("key, label, category, step, position")
+		.order("position");
+
+	if (error)
+	{
+		return { data: null, error };
+	}
+
+	return { data: data as unknown as OrderStatusDef[], error: null };
 }
 
 /**
@@ -343,24 +372,34 @@ interface KanbanOrderRow
  * items + an active/delivered split, not flat itemCount + cursor pagination),
  * so this is its own query rather than a listOrders() variant.
  *
- * Eng-review Decision 6: active statuses (pending/confirmed/dispatched) are
- * fetched unbounded since they're actionable and self-limiting in practice —
- * only `delivered` (a terminal state that accumulates forever) is capped, so
- * it can't crowd out the columns a kanban exists to surface problems in.
+ * Eng-review Decision 6: the actionable categories (to_confirm, preparing,
+ * in_transit) are fetched unbounded since they're self-limiting in practice —
+ * only `delivered` (a terminal category that accumulates forever) is capped.
+ * Cancelled orders don't go to the board.
  */
 export async function listOrdersForKanban(supabase: Client): Promise<QueryResult<KanbanOrder[]>>
 {
+	const { data: statuses, error: statusError } = await listOrderStatuses(supabase);
+	if (statusError)
+	{
+		return { data: null, error: statusError };
+	}
+
+	const keysOf = (categories: string[]) => statuses!.filter((s) => categories.includes(s.category)).map((s) => s.key);
+
 	const [activeResult, deliveredResult] = await Promise.all([
 		supabase
 			.from("orders")
 			.select(KANBAN_SELECT)
-			.in("status", ["pending", "confirmed", "dispatched"])
+			.eq("order_events.action", "pick_up")
+			.in("status", keysOf(["to_confirm", "preparing", "in_transit"]))
 			.order("created_at", { ascending: false }),
 		supabase
 			.from("orders")
 			.select(KANBAN_SELECT)
-			.eq("status", "delivered")
-			.order("created_at", { ascending: false })
+			.eq("order_events.action", "pick_up")
+			.in("status", keysOf(["delivered"]))
+			.order("status_changed_at", { ascending: false })
 			.limit(DELIVERED_KANBAN_LIMIT),
 	]);
 
@@ -385,12 +424,20 @@ export async function listOrdersForKanban(supabase: Client): Promise<QueryResult
 			priceAtOrder: item.price_at_order,
 			productName: item.products?.name ?? "—",
 		})),
+		driverName: row.users?.name ?? null,
+		deliveryDate: row.delivery_date,
+		deliveryWindow: row.delivery_window,
+		statusChangedAt: row.status_changed_at,
+		attempt: row.order_events[0]?.count ?? 0,
 	}));
 
 	return { data: orders, error: null };
 }
 
 /**
+ * @deprecated — replaced in Task 7. Direct status writes are revoked for API
+ * roles (20261105110000): use assignOrder() and the other transition RPCs.
+ *
  * Drag-or-"Confirmar" status change. Direct update, not a new RPC — RLS
  * already permits admin/operator to update orders (T8's role matrix), and
  * there's no multi-table write here that would need create_order()'s
@@ -439,10 +486,44 @@ export interface OrderDetail
 	customerName: string;
 	customerPhone: string | null;
 	items: OrderDetailItem[];
+	driver: string | null;
+	deliveryDate: string | null;
+	deliveryWindow: string | null;
+	invoiceStatus: string;
+	events: OrderDetailEvent[];
+	/** Latest delivery attempt; proof URLs are signed for 1 h (null if signing failed). */
+	delivery: OrderDetailDelivery | null;
+}
+
+export interface OrderDetailEvent
+{
+	action: string;
+	fromStatus: string | null;
+	toStatus: string;
+	actorName: string | null;
+	reason: string | null;
+	note: string | null;
+	createdAt: string;
+}
+
+export interface OrderDetailDelivery
+{
+	receiverName: string | null;
+	signatureUrl: string | null;
+	photoUrl: string | null;
+	paymentMethod: string | null;
+	amountCollected: number | null;
+	createdAt: string;
+	outcome: string;
+	failureReason: string | null;
+	failureNote: string | null;
 }
 
 const ORDER_DETAIL_SELECT = "id, status, channel, notes, created_at, updated_at, " +
-	"customers(name, phone), " +
+	"delivery_date, delivery_window, invoice_status, " +
+	"customers(name, phone), users!orders_driver_fkey(name), " +
+	"order_events(action, from_status, to_status, reason, note, created_at, users(name)), " +
+	"order_deliveries(outcome, receiver_name, signature_path, photo_path, failure_reason, failure_note, payment_method, amount_collected, created_at), " +
 	"order_items(id, quantity, price_at_order, unit_at_order, price_overridden_by, price_overridden_at, " +
 	"products(name), users!order_items_price_overridden_by_fkey(name))";
 
@@ -454,7 +535,31 @@ interface OrderDetailRow
 	notes: string | null;
 	created_at: string;
 	updated_at: string;
+	delivery_date: string | null;
+	delivery_window: string | null;
+	invoice_status: string;
 	customers: { name: string; phone: string | null } | null;
+	users: { name: string } | null;
+	order_events: {
+		action: string;
+		from_status: string | null;
+		to_status: string;
+		reason: string | null;
+		note: string | null;
+		created_at: string;
+		users: { name: string } | null;
+	}[];
+	order_deliveries: {
+		outcome: string;
+		receiver_name: string | null;
+		signature_path: string | null;
+		photo_path: string | null;
+		failure_reason: string | null;
+		failure_note: string | null;
+		payment_method: string | null;
+		amount_collected: number | null;
+		created_at: string;
+	}[];
 	order_items: {
 		id: string;
 		quantity: number;
@@ -489,6 +594,43 @@ export async function getOrderDetail(supabase: Client, orderId: string): Promise
 
 	const row = data as unknown as OrderDetailRow;
 
+	const events = [...row.order_events]
+		.sort((a, b) => a.created_at.localeCompare(b.created_at))
+		.map((e) => ({
+			action: e.action,
+			fromStatus: e.from_status,
+			toStatus: e.to_status,
+			actorName: e.users?.name ?? null,
+			reason: e.reason,
+			note: e.note,
+			createdAt: e.created_at,
+		}));
+
+	const last = [...row.order_deliveries].sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+	// A proof that can't be signed shows as missing; it doesn't fail the whole detail.
+	const sign = async (path: string | null) =>
+	{
+		if (!path)
+		{
+			return null;
+		}
+		const { data: signed, error: signError } = await supabase.storage.from("delivery-proofs").createSignedUrl(path, 3600);
+		return signError ? null : signed.signedUrl;
+	};
+	const delivery: OrderDetailDelivery | null = last
+		? {
+			receiverName: last.receiver_name,
+			signatureUrl: await sign(last.signature_path),
+			photoUrl: await sign(last.photo_path),
+			paymentMethod: last.payment_method,
+			amountCollected: last.amount_collected,
+			createdAt: last.created_at,
+			outcome: last.outcome,
+			failureReason: last.failure_reason,
+			failureNote: last.failure_note,
+		}
+		: null;
+
 	const detail: OrderDetail = {
 		id: row.id,
 		status: row.status,
@@ -498,6 +640,12 @@ export async function getOrderDetail(supabase: Client, orderId: string): Promise
 		updatedAt: row.updated_at,
 		customerName: row.customers?.name ?? "—",
 		customerPhone: row.customers?.phone ?? null,
+		driver: row.users?.name ?? null,
+		deliveryDate: row.delivery_date,
+		deliveryWindow: row.delivery_window,
+		invoiceStatus: row.invoice_status,
+		events,
+		delivery,
 		items: row.order_items.map((item) => ({
 			id: item.id,
 			quantity: item.quantity,

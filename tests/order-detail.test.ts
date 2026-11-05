@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { setupTenant, type TestTenant } from "@/tests/fixtures";
+import { assignOrder, pickUpOrders, recordDelivery, respondToAssignment, uploadDeliveryProof } from "@/lib/orders/actions-client";
 import { createOrder, getOrderDetail, quickAddCustomer, quickAddProduct, updateOrderDetail } from "@/lib/supabase/queries";
 
 describe("getOrderDetail() / updateOrderDetail() / update_order_detail() RPC", () =>
@@ -255,6 +256,58 @@ describe("getOrderDetail() / updateOrderDetail() / update_order_detail() RPC", (
 			const { data: detail } = await getOrderDetail(tenant.admin, orderId);
 			expect(detail?.notes).toBe("original notes");
 			expect(detail?.items[0].priceAtOrder).toBe(10);
+		});
+	});
+
+	describe("getOrderDetail() fulfillment fields", () =>
+	{
+		it("returns driver, schedule, invoice status, the event trail and the delivery with signed proof URLs", async () =>
+		{
+			const { orderId, itemId } = await freshOrder();
+			expect((await assignOrder(tenant.operator, orderId, {
+				driverId: tenant.driverId, deliveryDate: "2026-11-10", deliveryWindow: "AM", expectedStatus: "pending",
+			})).error).toBeNull();
+			expect((await respondToAssignment(tenant.driver, orderId, true, "confirmed")).error).toBeNull();
+			expect((await pickUpOrders(tenant.driver, [orderId])).error).toBeNull();
+
+			const deliveryId = crypto.randomUUID();
+			const png = new Blob([new Uint8Array([137, 80, 78, 71])], { type: "image/png" });
+			const { data: path, error: uploadError } = await uploadDeliveryProof(tenant.driver, tenant.tenantId, deliveryId, "signature", png);
+			expect(uploadError).toBeNull();
+			expect(path).toBe(`${tenant.tenantId}/${deliveryId}/signature.png`);
+
+			const { error } = await recordDelivery(tenant.driver, orderId, {
+				deliveryId,
+				outcome: "delivered",
+				lines: [{ orderItemId: itemId, deliveredQuantity: 2 }],
+				receiverName: "Juan",
+				signaturePath: path,
+				photoPath: null,
+				failureReason: null,
+				failureNote: null,
+				paymentMethod: "cash",
+				amountCollected: 20,
+			});
+			expect(error).toBeNull();
+
+			const { data, error: detailError } = await getOrderDetail(tenant.operator, orderId);
+			expect(detailError).toBeNull();
+			expect(data).toMatchObject({ status: "delivered", deliveryDate: "2026-11-10", deliveryWindow: "AM", invoiceStatus: "pending" });
+			expect(data?.driver).not.toBeNull();
+			expect(data?.events.map((e) => e.action)).toEqual(["create", "assign", "accept", "pick_up", "deliver"]);
+			expect(data?.events[1].actorName).not.toBeNull();
+			expect(data?.delivery).toMatchObject({ receiverName: "Juan", paymentMethod: "cash", amountCollected: 20, outcome: "delivered", photoUrl: null });
+			const response = await fetch(data!.delivery!.signatureUrl!);
+			expect(response.status).toBe(200);
+		});
+
+		it("an order with no delivery has delivery null and no driver", async () =>
+		{
+			const { orderId } = await freshOrder();
+			const { data } = await getOrderDetail(tenant.operator, orderId);
+			expect(data?.delivery).toBeNull();
+			expect(data?.driver).toBeNull();
+			expect(data?.events.map((e) => e.action)).toEqual(["create"]);
 		});
 	});
 });

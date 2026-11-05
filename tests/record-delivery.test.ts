@@ -80,14 +80,15 @@ describe("record_delivery", () =>
 	const full = (items: { id: string; quantity: number }[]) =>
 		items.map((i) => ({ order_item_id: i.id, delivered_quantity: i.quantity }));
 
-	async function row<T extends "orders" | "order_events" | "order_deliveries">(t: T, id: string, col = "id")
+	async function row<T extends "orders" | "order_items" | "order_events" | "order_deliveries">(t: T, id: string, col = "id")
 	{
-		const { data, error } = await tenant.service.from(t).select("*").eq(col, id);
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic table name
+		const { data, error } = await (tenant.service as any).from(t).select("*").eq(col, id);
 		expect(error).toBeNull();
 		return data as any[];
 	}
 
-	async function setSettings(patch: Record<string, boolean>)
+	async function setSettings(patch: { require_signature?: boolean; require_receiver_name?: boolean; require_photo?: boolean; require_driver_acceptance?: boolean })
 	{
 		const { error } = await tenant.service.from("tenant_order_settings").update(patch).eq("tenant_id", tenant.tenantId);
 		expect(error).toBeNull();

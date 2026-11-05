@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { setupTenant, type TestTenant } from "@/tests/fixtures";
-import { createOrder, listOrdersForKanban, quickAddCustomer, quickAddProduct, updateOrderStatus } from "@/lib/supabase/queries";
+import { createOrder, listOrdersForKanban, quickAddCustomer, quickAddProduct } from "@/lib/supabase/queries";
+import { assignOrder } from "@/lib/orders/actions-client";
 
-describe("listOrdersForKanban() / updateOrderStatus()", () =>
+describe("listOrdersForKanban() / assignOrder() from the board", () =>
 {
 	let tenant: TestTenant;
 	let customerId: string;
@@ -34,7 +35,8 @@ describe("listOrdersForKanban() / updateOrderStatus()", () =>
 		const orderId = data!.order.id;
 		if (status !== "pending")
 		{
-			await tenant.service.from("orders").update({ status }).eq("id", orderId);
+			// service_role: API roles can't write status directly any more.
+			expect((await tenant.service.from("orders").update({ status }).eq("id", orderId)).error).toBeNull();
 		}
 		return orderId;
 	}
@@ -50,14 +52,18 @@ describe("listOrdersForKanban() / updateOrderStatus()", () =>
 		expect(order!.items).toEqual([{ quantity: 1, priceAtOrder: 8, productName: "Kanban Test Product" }]);
 	});
 
-	it("fetches active statuses (pending/confirmed/dispatched) unbounded", async () =>
+	it("fetches the to_confirm, preparing and in_transit categories unbounded, and leaves cancelled out", async () =>
 	{
 		const pendingId = await freshOrder("pending");
 		const confirmedId = await freshOrder("confirmed");
 		const dispatchedId = await freshOrder("dispatched");
+		const failedId = await freshOrder("delivery_failed");
+		const cancelledId = await freshOrder("cancelled");
 
 		const { data } = await listOrdersForKanban(tenant.admin);
 		const ids = data!.map((o) => o.id);
+		expect(ids).toContain(failedId);
+		expect(ids).not.toContain(cancelledId);
 		expect(ids).toContain(pendingId);
 		expect(ids).toContain(confirmedId);
 		expect(ids).toContain(dispatchedId);
@@ -76,9 +82,71 @@ describe("listOrdersForKanban() / updateOrderStatus()", () =>
 		const { data } = await listOrdersForKanban(tenant.admin);
 		const delivered = data!.filter((o) => o.status === "delivered");
 		expect(delivered.length).toBe(50);
+	}, 60_000);
+
+	it("counts partially_delivered in the delivered category", async () =>
+	{
+		const t = await setupTenant();
+		try
+		{
+			const { data: customer } = await quickAddCustomer(t.admin, "Partial Customer");
+			const { data: product } = await quickAddProduct(t.admin, "Partial Product", { pricePerUnit: 1, unit: "each" });
+			const { data } = await createOrder(t.admin, { customer_id: customer!.id, notes: null, items: [{ product_id: product!.id, quantity: 1 }] });
+			expect((await t.service.from("orders").update({ status: "partially_delivered" }).eq("id", data!.order.id)).error).toBeNull();
+
+			const { data: board } = await listOrdersForKanban(t.admin);
+			expect(board!.map((o) => o.status)).toEqual(["partially_delivered"]);
+		}
+		finally
+		{
+			await t.teardown();
+		}
 	});
 
-	it.todo("updateOrderStatus() changes the status and RLS/role (T8) still blocks a driver from calling it — rewritten in Task 6");
+	it("assignOrder() confirms from the board and the card shows driver, date, window and a fresh status_changed_at", async () =>
+	{
+		const orderId = await freshOrder("pending");
+		const before = Date.now();
+		const { error } = await assignOrder(tenant.operator, orderId, {
+			driverId: tenant.driverId,
+			deliveryDate: "2026-11-10",
+			deliveryWindow: "AM",
+			expectedStatus: "pending",
+		});
+		expect(error).toBeNull();
 
-	it.todo("updateOrderStatus() with an expected status won't overwrite a move the board hasn't seen — rewritten in Task 6");
+		const { data } = await listOrdersForKanban(tenant.operator);
+		const card = data!.find((o) => o.id === orderId)!;
+		expect(card.status).toBe("confirmed");
+		expect(card.driverName).not.toBeNull();
+		expect(card.deliveryDate).toBe("2026-11-10");
+		expect(card.deliveryWindow).toBe("AM");
+		expect(card.attempt).toBe(0);
+		expect(new Date(card.statusChangedAt).getTime()).toBeGreaterThan(before - 60_000);
+	});
+
+	it("assignOrder() with a stale expected status is rejected with PT409 and moves nothing", async () =>
+	{
+		const orderId = await freshOrder("confirmed");
+		const { error } = await assignOrder(tenant.operator, orderId, {
+			driverId: tenant.driverId,
+			deliveryDate: "2026-11-10",
+			deliveryWindow: null,
+			expectedStatus: "pending",
+		});
+		expect(error?.code).toBe("PT409");
+	});
+
+	it("a driver can't assign from the board (42501)", async () =>
+	{
+		const orderId = await freshOrder("pending");
+		const { error } = await assignOrder(tenant.driver, orderId, {
+			driverId: tenant.driverId,
+			deliveryDate: "2026-11-10",
+			deliveryWindow: null,
+			expectedStatus: "pending",
+		});
+		expect(error?.code).toBe("42501");
+	});
+
 });

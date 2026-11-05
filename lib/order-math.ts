@@ -20,9 +20,11 @@ export function calculateLineTotal(quantity: number, pricePerUnit: number | null
  * Mirrors orders.status's db check constraint (core_schema.sql) — the
  * kanban's 4 columns map 1:1 onto these, no new enum values needed.
  */
+/** @deprecated — replaced in Task 7 */
 export const ORDER_STATUSES = ["pending", "confirmed", "dispatched", "delivered"] as const;
 export type OrderStatus = typeof ORDER_STATUSES[number];
 
+/** @deprecated — replaced in Task 7 */
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 	pending: "Pendiente",
 	confirmed: "Confirmado",
@@ -36,12 +38,14 @@ const NEXT_STATUS_ACTIONS: Partial<Record<OrderStatus, { status: OrderStatus; la
 	dispatched: { status: "delivered", label: "Entregar" },
 };
 
+/** @deprecated — replaced in Task 7 */
 /** The usual next step for an order; null once it's delivered. */
 export function nextStatusAction(status: OrderStatus): { status: OrderStatus; label: string } | null
 {
 	return NEXT_STATUS_ACTIONS[status] ?? null;
 }
 
+/** @deprecated — replaced in Task 7 */
 /** A list fetched while moves are in flight may predate them; keep the moves. */
 export function applyPendingMoves<T extends { id: string; status: string }>(orders: T[], pending: ReadonlyMap<string, OrderStatus>): T[]
 {
@@ -52,6 +56,7 @@ export function applyPendingMoves<T extends { id: string; status: string }>(orde
 	});
 }
 
+/** @deprecated — replaced in Task 7 */
 export function isOrderStatus(status: string): status is OrderStatus
 {
 	return (ORDER_STATUSES as readonly string[]).includes(status);
@@ -77,6 +82,7 @@ export function calculateOrderTotal(items: { quantity: number; priceAtOrder: num
 	return { total, unpricedCount };
 }
 
+/** @deprecated — replaced in Task 7 */
 /**
  * Buckets orders into the kanban's 4 columns. An order whose status isn't
  * one of the 4 known values (shouldn't happen — the db check constraint

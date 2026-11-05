@@ -82,13 +82,16 @@ describe("getTodayStats() / get_today_stats() RPC", () =>
 			await insertOrderAt(t, customer!.id, product!.id, NOW, "pending");
 			await insertOrderAt(t, customer!.id, product!.id, NOW, "delivered");
 			await insertOrderAt(t, customer!.id, product!.id, NOW, "confirmed");
+			await insertOrderAt(t, customer!.id, product!.id, NOW, "partially_delivered");
+			await insertOrderAt(t, customer!.id, product!.id, NOW, "cancelled");
 			await insertOrderAt(t, customer!.id, product!.id, YESTERDAY, "pending");
 
 			const { data, error } = await getTodayStats(t.admin, DAY_START, DAY_END);
 			expect(error).toBeNull();
-			expect(data?.ordersToday).toBe(3);
+			expect(data?.ordersToday).toBe(5);
 			expect(data?.pendingToday).toBe(1);
-			expect(data?.deliveredToday).toBe(1);
+			// Counted by category: partially_delivered is a delivered order too.
+			expect(data?.deliveredToday).toBe(2);
 		}
 		finally
 		{

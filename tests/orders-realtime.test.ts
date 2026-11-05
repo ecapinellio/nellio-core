@@ -2,7 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createClient, type RealtimeChannel, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import { setupTenant, type TestTenant } from "@/tests/fixtures";
-import { createOrder, quickAddCustomer, quickAddProduct, updateOrderStatus } from "@/lib/supabase/queries";
+import { createOrder, quickAddCustomer, quickAddProduct } from "@/lib/supabase/queries";
+import { assignOrder } from "@/lib/orders/actions-client";
 import { subscribeToOrders } from "@/lib/supabase/orders-live";
 
 // How long "no event arrived" is waited for. Realtime usually delivers in ms.
@@ -92,7 +93,31 @@ describe("live /orders (ADR-010)", () =>
 		await Promise.all([tenant.teardown(), otherTenant.teardown()]);
 	});
 
-	it.todo("tells another session of the same tenant when an order moves — rewritten in Task 6");
+	/** Puts the order back to pending (service_role: API roles can't write status). Do it before listening. */
+	async function reset()
+	{
+		const { error } = await service.from("orders")
+			.update({ status: "pending", driver_id: null, delivery_date: null, delivery_window: null })
+			.eq("id", orderId);
+		expect(error).toBeNull();
+	}
+
+	/** Moves the order through the office RPC: direct status writes are closed to API roles. */
+	function assign(window: string, expectedStatus: string)
+	{
+		return assignOrder(tenant.admin, orderId, {
+			driverId: tenant.driverId, deliveryDate: "2026-11-10", deliveryWindow: window, expectedStatus,
+		});
+	}
+
+	it("tells another session of the same tenant when an order moves", async () =>
+	{
+		await reset();
+		const received = await listen(tenant.operator, tenant.tenantId);
+		expect((await assign("AM", "pending")).error).toBeNull();
+		await settle(received, true);
+		await stop();
+	});
 
 	// The browser client restores its session from cookies, so nothing signs in
 	// and Realtime would connect as anon, seeing nothing through RLS.
@@ -130,7 +155,18 @@ describe("live /orders (ADR-010)", () =>
 		await stop();
 	});
 
-	it.todo("tells nothing to another tenant, even with a forged filter — rewritten in Task 6");
+	it("tells nothing to another tenant, even with a forged filter", async () =>
+	{
+		await reset();
+		const control = await listen(tenant.operator, tenant.tenantId);
+		const own = await listen(otherTenant.operator, otherTenant.tenantId);
+		const forged = await listen(otherTenant.admin, tenant.tenantId);
+		expect((await assign("PM", "pending")).error).toBeNull();
+		await settle(control, true);
+		await settle(own, false);
+		await settle(forged, false);
+		await stop();
+	});
 
 	// Realtime applies neither RLS nor filters to DELETE events, so the board
 	// must not listen to them: here, another tenant being offboarded.
@@ -175,6 +211,7 @@ describe("live /orders (ADR-010)", () =>
 			});
 			expect((await driver2.auth.signInWithPassword({ email, password: "Nellio-Test-Pass-2026!" })).error).toBeNull();
 
+			await reset();
 			const mine = await listen(tenant.driver, tenant.tenantId);
 			const other = await listen(driver2, tenant.tenantId);
 			const { error: assignError } = await tenant.operator.rpc("assign_order", {
@@ -193,5 +230,21 @@ describe("live /orders (ADR-010)", () =>
 		}
 	}, 30_000);
 
-	it.todo("stops telling a deactivated user (ADR-009) — rewritten in Task 6");
+	it("stops telling a deactivated user (ADR-009)", async () =>
+	{
+		const control = await listen(tenant.operator, tenant.tenantId);
+		const received = await listen(tenant.driver, tenant.tenantId);
+		expect((await service.auth.admin.updateUserById(tenant.driverId, { ban_duration: "1h" })).error).toBeNull();
+		try
+		{
+			// The banned driver can't be assigned any more: change the order another way.
+			expect((await tenant.admin.from("orders").update({ notes: "after ban" }).eq("id", orderId)).error).toBeNull();
+			await settle(control, true);
+			await settle(received, false);
+		}
+		finally
+		{
+			await stop();
+		}
+	});
 });

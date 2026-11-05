@@ -350,6 +350,9 @@ isOneToOne: false
 "is_operator_or_admin":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
+"list_driver_orders":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
 "list_tenant_drivers":
 { Args: Record<PropertyKey, never>; Returns: {
               "active": boolean,"id": string,"name": string
@@ -378,6 +381,29 @@ isOneToOne: false
 "order_status_for_step":
 { Args: { "p_step": string,"p_tenant_id": string }; Returns: string
                            },
+"pick_up_orders":
+{ Args: { "p_order_ids": (string)[] }; Returns: {
+              "channel": string,
+"created_at": string,
+"created_by": string | null,
+"customer_id": string,
+"delivery_date": string | null,
+"delivery_window": string | null,
+"driver_id": string | null,
+"id": string,
+"invoice_status": string,
+"notes": string | null,
+"status": string,
+"status_changed_at": string,
+"tenant_id": string,
+"updated_at": string
+            }[]
+                          SetofOptions: {
+        from: "*"
+        to: "orders"
+        isOneToOne: false
+        isSetofReturn: true
+      } },
 "quick_add_customer":
 { Args: { "p_name": string }; Returns: {
               "active": boolean,
@@ -417,6 +443,29 @@ isOneToOne: false
                           SetofOptions: {
         from: "*"
         to: "products"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
+"respond_to_assignment":
+{ Args: { "p_accept": boolean,"p_expected_status": string,"p_order_id": string }; Returns: {
+              "channel": string,
+"created_at": string,
+"created_by": string | null,
+"customer_id": string,
+"delivery_date": string | null,
+"delivery_window": string | null,
+"driver_id": string | null,
+"id": string,
+"invoice_status": string,
+"notes": string | null,
+"status": string,
+"status_changed_at": string,
+"tenant_id": string,
+"updated_at": string
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "orders"
         isOneToOne: true
         isSetofReturn: false
       } },

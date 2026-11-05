@@ -157,5 +157,41 @@ describe("live /orders (ADR-010)", () =>
 		await stop();
 	}, 30_000);
 
+	// Drivers have a row-level policy of their own: only their orders reach them.
+	it("a driver gets events only for their own orders", async () =>
+	{
+		const email = `rt-d2-${crypto.randomUUID()}@test.local`;
+		const { data: u, error } = await service.auth.admin.createUser({
+			email, password: "Nellio-Test-Pass-2026!", email_confirm: true,
+			app_metadata: { tenant_id: tenant.tenantId, role: "driver" },
+		});
+		expect(error).toBeNull();
+		const driver2Id = u.user!.id;
+		try
+		{
+			expect((await service.from("users").insert({ id: driver2Id, tenant_id: tenant.tenantId, name: "RT D2", role: "driver" })).error).toBeNull();
+			const driver2 = createClient<Database>(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+				auth: { autoRefreshToken: false, persistSession: false },
+			});
+			expect((await driver2.auth.signInWithPassword({ email, password: "Nellio-Test-Pass-2026!" })).error).toBeNull();
+
+			const mine = await listen(tenant.driver, tenant.tenantId);
+			const other = await listen(driver2, tenant.tenantId);
+			const { error: assignError } = await tenant.operator.rpc("assign_order", {
+				p_order_id: orderId, p_driver_id: tenant.driverId, p_delivery_date: "2026-11-10",
+				p_delivery_window: "AM", p_expected_status: "pending",
+			});
+			expect(assignError).toBeNull();
+			await settle(mine, true);
+			await settle(other, false);
+			await stop();
+		}
+		finally
+		{
+			await stop();
+			await service.auth.admin.deleteUser(driver2Id);
+		}
+	}, 30_000);
+
 	it.todo("stops telling a deactivated user (ADR-009) — rewritten in Task 6");
 });

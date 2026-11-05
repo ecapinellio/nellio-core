@@ -134,7 +134,7 @@ alter table public.orders
   add column invoice_status text not null default 'not_invoiced'
     check (invoice_status in ('not_invoiced', 'pending', 'issued', 'error')),
   add constraint orders_driver_fkey foreign key (tenant_id, driver_id)
-    references public.users (tenant_id, id);
+    references public.users (tenant_id, id) on delete set null (driver_id);
 create index orders_tenant_driver_idx on public.orders (tenant_id, driver_id);
 
 alter table public.order_items

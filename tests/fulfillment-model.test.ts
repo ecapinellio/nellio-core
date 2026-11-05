@@ -110,4 +110,28 @@ describe("fulfillment model", () =>
 		const os = await other.admin.from("order_statuses").select().eq("tenant_id", tenant.tenantId);
 		expect(os.data ?? []).toHaveLength(0);
 	});
+
+	it("deleting an assigned driver nulls orders.driver_id and keeps the order", async () =>
+	{
+		const t = await setupTenant();
+		try
+		{
+			const { data: c } = await quickAddCustomer(t.admin, "Driver Delete Customer");
+			const { data: p } = await quickAddProduct(t.admin, "Driver Delete Product");
+			const { data } = await createOrder(t.operator, { customer_id: c!.id, notes: "x", items: [{ product_id: p!.id, quantity: 1 }] });
+			const id = data!.order.id;
+			const up = await t.service.from("orders").update({ driver_id: t.driverId }).eq("id", id);
+			expect(up.error).toBeNull();
+
+			const del = await t.service.auth.admin.deleteUser(t.driverId);
+			expect(del.error).toBeNull();
+
+			const { data: order } = await t.service.from("orders").select("driver_id, tenant_id").eq("id", id).single();
+			expect(order).toMatchObject({ driver_id: null, tenant_id: t.tenantId });
+		}
+		finally
+		{
+			await t.teardown();
+		}
+	});
 });

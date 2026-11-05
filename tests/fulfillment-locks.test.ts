@@ -75,6 +75,17 @@ describe("direct writes closed and edit lock", () =>
 		expect(error?.code).toBe("42501");
 	});
 
+	it("operator cannot insert an item with delivered_quantity, a normal insert works", async () =>
+	{
+		const { orderId } = await freshOrder();
+		const row = { order_id: orderId, product_id: productId, quantity: 1, tenant_id: tenant.tenantId };
+		const bad = await tenant.operator.from("order_items").insert({ ...row, delivered_quantity: 1 });
+		expect(bad.error?.code).toBe("42501");
+		const bad2 = await tenant.operator.from("order_items").insert({ ...row, shortfall_reason: "other" });
+		expect(bad2.error?.code).toBe("42501");
+		expect((await tenant.operator.from("order_items").insert(row)).error).toBeNull();
+	});
+
 	it("edits allowed until accepted, rejected from in_transit on", async () =>
 	{
 		const { orderId, itemId } = await freshOrder();

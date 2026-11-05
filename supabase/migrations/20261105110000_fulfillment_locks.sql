@@ -9,7 +9,12 @@ revoke insert, update on public.orders from authenticated, anon;
 grant insert (tenant_id, customer_id, created_by, notes, channel) on public.orders to authenticated;
 grant update (customer_id, notes) on public.orders to authenticated;
 
-revoke update on public.order_items from authenticated, anon;
+revoke insert, update on public.order_items from authenticated, anon;
+-- delivered_quantity/shortfall_* are not insertable either; price_overridden_*
+-- are accepted but the stamp trigger nulls them on insert.
+grant insert (tenant_id, order_id, product_id, quantity, price_at_order, unit_at_order,
+              price_overridden_by, price_overridden_at)
+  on public.order_items to authenticated;
 -- price_overridden_*: update_order_detail() sets them (a trigger decides them).
 grant update (product_id, quantity, price_at_order, unit_at_order,
               price_overridden_by, price_overridden_at)

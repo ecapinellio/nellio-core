@@ -46,7 +46,7 @@ begin
   v_prev := v_order.driver_id;
   select s.step into v_step from public.order_statuses s
   where s.tenant_id = v_tenant_id and s.key = v_from;
-  if v_step not in ('created', 'confirmed', 'accepted', 'delivery_failed') then
+  if v_step is null or v_step not in ('created', 'confirmed', 'accepted', 'delivery_failed') then
     raise exception 'Cannot assign an order in step %', v_step using errcode = '22023';
   end if;
 
@@ -125,7 +125,7 @@ begin
   v_from := v_order.status;
   select s.step into v_step from public.order_statuses s
   where s.tenant_id = v_tenant_id and s.key = v_from;
-  if v_step not in ('created', 'confirmed', 'accepted', 'delivery_failed') then
+  if v_step is null or v_step not in ('created', 'confirmed', 'accepted', 'delivery_failed') then
     raise exception 'Cannot cancel an order in step %', v_step using errcode = '22023';
   end if;
 

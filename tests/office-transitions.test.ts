@@ -192,6 +192,16 @@ describe("office transitions", () =>
 		expect((await correct(tenant.admin, issued, "confirmed", "x", "delivered")).error?.code).toBe("22023");
 	});
 
+	it("step-less custom status cannot be assigned or cancelled", async () =>
+	{
+		const { error: e } = await tenant.service.from("order_statuses")
+			.insert({ tenant_id: tenant.tenantId, key: "custom_x", label: "Custom", category: "preparing", step: null, position: 900 });
+		expect(e).toBeNull();
+		const id = await fresh("custom_x");
+		expect((await assign(tenant.operator, id, tenant.driverId, "custom_x")).error?.code).toBe("22023");
+		expect((await tenant.operator.rpc("cancel_order", { p_order_id: id, p_reason: "customer_closed", p_note: "", p_expected_status: "custom_x" })).error?.code).toBe("22023");
+	});
+
 	it("list_tenant_drivers returns only this tenant's drivers with active flag", async () =>
 	{
 		const { data, error } = await tenant.operator.rpc("list_tenant_drivers");

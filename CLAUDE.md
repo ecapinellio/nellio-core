@@ -62,10 +62,15 @@ de la app.
 - `products` — catálogo. Sin stock (inventario se modela post-discovery).
 - `orders` — cabecera del pedido. Guarda el mensaje original en `notes`.
 - `order_items` — líneas del pedido. Tabla separada => varios productos por pedido.
+- `order_statuses` — estados del pedido **por empresa**: `key` y nombre propios,
+  mapeados a una `category` y (los que usa el sistema) a un `step` fijos (ADR-012).
+- `tenant_order_settings` — interruptores por empresa del proceso de entrega.
+- `order_events` — historial de cada pedido (quién, qué, cuándo).
+- `order_deliveries` — cada intento de entrega: resultado (entregada / parcial /
+  fallida), firma, receptor, foto y cobro.
 
 ### Pendiente de modelar (después del discovery con Milo y Alejandra)
 - Inventario / stock / movimientos de inventario / bodegas
-- Entregas (delivery) y si soportan entregas parciales
 - Tabla `dte` completa (firma, transmisión, sello de recepción)
 
 ---
@@ -193,6 +198,23 @@ detección real solo se prueba en un deploy de Vercel. Un formulario nuevo
 que llame a GoTrue desde el servidor debe agregarse a `protect` y llamar a
 `checkBotId()`.
 
+### ADR-012: Estados por empresa con categorías y steps fijos; transiciones solo por funciones security definer
+**Decisión:** cada empresa define sus estados (`order_statuses`: clave, nombre,
+posición), pero cada uno pertenece a una `category` fija y los que el sistema
+necesita llevan un `step` fijo (`created`, `confirmed`, `accepted`, `picked_up`,
+`delivery_failed`, …). Los cambios de estado, chofer y entrega solo ocurren en
+funciones `security definer` (`assign_order`, `respond_to_assignment`,
+`record_delivery`, …).
+**Por qué:** ECTEC y la siguiente empresa nombran y ordenan su proceso distinto;
+el código no puede depender de claves. Las categorías dan estadísticas y reglas
+comparables entre empresas. Las funciones validan la transición y escriben el
+historial en la misma transacción; un PATCH directo se las saltaría.
+**Consecuencias:** `authenticated` no tiene GRANT de UPDATE/INSERT sobre las
+columnas de estado/entrega de `orders` ni sobre `order_items`. Toda acción nueva
+busca su estado por `step` (`order_status_for_step()`), nunca por clave ni por
+nombre. Las políticas de lectura del chofer filtran por `category`. Pendiente:
+pantalla para editar los estados (TODOS, fase 5).
+
 ---
 
 ## Vistas del frontend por rol (Fase 1)
@@ -248,6 +270,8 @@ verificación en backend.
   - Los cambios de usuarios quedan en Supabase → Authentication → Audit Logs.
 - Probar las políticas RLS **desde la app logueado**, no desde el SQL Editor
   (el editor salta el RLS y muestra todas las filas).
+- Cambios de estado de pedidos solo por funciones security definer
+  (`assign_order`, …); columnas de estado/entrega sin GRANT para `authenticated`.
 - Toda tabla nueva con `tenant_id`: activar RLS y crear la política de aislamiento.
 - Indexar siempre `tenant_id`.
 - Columnas de auditoría (quién creó / quién cambió / cuándo:
@@ -296,7 +320,11 @@ desactivados; y la lógica pura de la tabla en `lib/products/`), los clientes
 campos enviados, conflictos; búsqueda por teléfono/NIT; y `lib/customers/`),
 la tabla genérica (`lib/grid/core.ts`), y el cambio de contraseña obligatorio
 al primer ingreso (`must_change_password`), y `/orders` en vivo (`subscribeToOrders()`:
-eventos por tenant, aislamiento, revocación).
+eventos por tenant, aislamiento, revocación), y el proceso de entrega
+(modelo de estados y privilegios por columna, candados, transiciones de oficina,
+`list_driver_orders()` / `respond_to_assignment()`, `record_delivery()` con
+parciales y fallidas, estadísticas por categoría, y la lógica pura de
+`lib/orders/` (fulfillment, delivery-form, driver-orders)).
 
 **CI:** `.github/workflows/test.yml` corre la suite en cada push/PR contra un
 stack de Supabase local efímero (sin secrets — son las keys demo locales).

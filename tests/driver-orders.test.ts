@@ -4,6 +4,8 @@ import type { Database } from "@/lib/supabase/database.types";
 import { setupTenant, type TestTenant } from "@/tests/fixtures";
 import { createOrder, quickAddCustomer, quickAddProduct } from "@/lib/supabase/queries";
 
+type Row = { id: string } & Record<string, unknown>;
+
 const PASSWORD = "Nellio-Test-Pass-2026!";
 
 describe("driver orders", () =>
@@ -93,7 +95,7 @@ describe("driver orders", () =>
 
 		const { data: list, error } = await tenant.driver.rpc("list_driver_orders");
 		expect(error).toBeNull();
-		const listIds = (list as { id: string }[]).map((o) => o.id);
+		const listIds = (list as Row[]).map((o) => o.id);
 		expect(listIds).toContain(mine);
 		expect(listIds).not.toContain(theirs);
 
@@ -106,7 +108,7 @@ describe("driver orders", () =>
 	{
 		const id = await assigned(tenant.driverId, 3);
 		const { data } = await tenant.driver.rpc("list_driver_orders");
-		const order = (data as any[]).find((o) => o.id === id);
+		const order = (data as (Row & { items: Row[] })[]).find((o) => o.id === id)!;
 		expect(order).toMatchObject({
 			status: "confirmed", category: "preparing", delivery_date: date, delivery_window: "AM", attempt: 0,
 			customer: { name: "Driver Customer", address: "Calle 1", phone: "7000-0000" },
@@ -125,11 +127,11 @@ describe("driver orders", () =>
 			.update({ status: "delivered", status_changed_at: new Date(Date.now() - d * 86400_000).toISOString() }).eq("id", id);
 		expect((await set(6)).error).toBeNull();
 		expect((await tenant.driver.from("orders").select("id").eq("id", id)).data).toHaveLength(1);
-		expect(((await tenant.driver.rpc("list_driver_orders")).data as any[]).some((o) => o.id === id)).toBe(true);
+		expect(((await tenant.driver.rpc("list_driver_orders")).data as Row[]).some((o) => o.id === id)).toBe(true);
 
 		expect((await set(8)).error).toBeNull();
 		expect((await tenant.driver.from("orders").select("id").eq("id", id)).data).toEqual([]);
-		expect(((await tenant.driver.rpc("list_driver_orders")).data as any[]).some((o) => o.id === id)).toBe(false);
+		expect(((await tenant.driver.rpc("list_driver_orders")).data as Row[]).some((o) => o.id === id)).toBe(false);
 	});
 
 	it("driver still cannot read customers or order_items directly", async () =>
@@ -200,7 +202,7 @@ describe("driver orders", () =>
 		expect((await statusOf(b)).status).toBe("dispatched");
 		const { data: ev } = await tenant.operator.from("order_events").select("id").eq("order_id", a).eq("action", "pick_up");
 		expect(ev).toHaveLength(1);
-		const list = (await tenant.driver.rpc("list_driver_orders")).data as any[];
+		const list = (await tenant.driver.rpc("list_driver_orders")).data as Row[];
 		expect(list.find((o) => o.id === a)).toMatchObject({ category: "in_transit", attempt: 1 });
 
 		expect((await tenant.driver.rpc("pick_up_orders", { p_order_ids: [] })).error?.code).toBe("22023");

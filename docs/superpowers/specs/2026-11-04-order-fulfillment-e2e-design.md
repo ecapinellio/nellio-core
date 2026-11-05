@@ -1,6 +1,6 @@
 # Proceso de punta a punta del pedido (fulfillment) — diseño
 
-Fecha: 2026-11-04 · Estado: borrador para revisión · Caso base: ECTEC ·
+Fecha: 2026-11-04 · Estado: fase 1 construida (rama feat/fulfillment-phase1) · Caso base: ECTEC ·
 Caso de prueba: Uniempaques CR (marcado como **[Supuesto Uniempaques]**)
 
 Convención de este documento: lo que dijo Emilio va sin marca. Lo que decidí

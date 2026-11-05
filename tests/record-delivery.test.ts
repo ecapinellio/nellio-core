@@ -3,6 +3,8 @@ import { setupTenant, type TestTenant } from "@/tests/fixtures";
 import { recordDelivery } from "@/lib/orders/actions-client";
 import { createOrder, quickAddCustomer, quickAddProduct } from "@/lib/supabase/queries";
 
+type Row = { id: string } & Record<string, unknown>;
+
 const PNG = Buffer.from(
 	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
 	"base64",
@@ -86,7 +88,7 @@ describe("record_delivery", () =>
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic table name
 		const { data, error } = await (tenant.service as any).from(t).select("*").eq(col, id);
 		expect(error).toBeNull();
-		return data as any[];
+		return data as Row[];
 	}
 
 	async function setSettings(patch: { require_signature?: boolean; require_receiver_name?: boolean; require_photo?: boolean; require_driver_acceptance?: boolean })
@@ -189,11 +191,11 @@ describe("record_delivery", () =>
 		expect(r.data).toMatchObject({ order: { status: "partially_delivered", invoice_status: "pending" }, delivery: { outcome: "partially_delivered" } });
 		const lines = await row("order_items", id, "order_id");
 		const short = lines.find((l) => l.id === items[0].id);
-		expect(Number(short.delivered_quantity)).toBe(6.5);
+		expect(Number(short!.delivered_quantity)).toBe(6.5);
 		expect(short).toMatchObject({ shortfall_reason: "damaged", shortfall_note: "caja rota" });
 		expect(lines.find((l) => l.id === items[1].id)).toMatchObject({ shortfall_reason: null });
 		const ev = (await row("order_events", id, "order_id")).find((e) => e.action === "deliver");
-		expect(ev.payload).toMatchObject({ delivery_id: did, partial: true });
+		expect(ev!.payload).toMatchObject({ delivery_id: did, partial: true });
 	});
 
 	it("all lines at zero is rejected", async () =>
@@ -280,8 +282,8 @@ describe("record_delivery", () =>
 		expect(a.data).toMatchObject({ status: "confirmed" });
 		expect((await tenant.driver.rpc("respond_to_assignment", { p_order_id: id, p_accept: true, p_expected_status: "confirmed" })).error).toBeNull();
 		expect((await tenant.driver.rpc("pick_up_orders", { p_order_ids: [id] })).error).toBeNull();
-		const list = (await tenant.driver.rpc("list_driver_orders")).data as any[];
-		expect(list.find((o) => o.id === id).attempt).toBe(2);
+		const list = (await tenant.driver.rpc("list_driver_orders")).data as Row[];
+		expect(list.find((o) => o.id === id)?.attempt).toBe(2);
 	});
 
 	it("retry with the same delivery id is a no-op", async () =>
@@ -304,7 +306,7 @@ describe("record_delivery", () =>
 		expect((await call(tenant.driver, o2.id, { ...args, p_lines: full(o2.items) })).error?.code).toBe("22023");
 		expect((await row("orders", o2.id))[0].status).toBe("dispatched");
 		expect((await call(other.driver, id, args)).error?.code).toBe("P0002");
-		const { data: [d] } = await tenant.service.from("order_deliveries").select("order_id, receiver_name").eq("id", did) as any;
+		const { data: [d] } = await tenant.service.from("order_deliveries").select("order_id, receiver_name").eq("id", did) as unknown as { data: { order_id: string; receiver_name: string }[] };
 		expect(d).toMatchObject({ order_id: id, receiver_name: "Ana" });
 	});
 
@@ -387,7 +389,7 @@ describe("record_delivery", () =>
 		expect((await correct(id, "confirmed", "delivered")).error).toBeNull();
 		expect((await correct(id, "delivered", "confirmed")).error).toBeNull();
 		const back = (await evs(id)).find((e) => e.to_status === "delivered");
-		expect(back.payload.without_signature).toBeUndefined();
+		expect((back!.payload as Row).without_signature).toBeUndefined();
 
 		// Failed delivery only: still without_signature.
 		const f = await pickedUp();

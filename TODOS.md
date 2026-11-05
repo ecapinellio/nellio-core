@@ -83,12 +83,14 @@ at it; the conflict check is what keeps data safe.
 
 ### Show who else changed an order
 
-**What:** Nothing tells you a card moved because a colleague moved it (no author
-on the card, no activity log). Pairs with the change-history TODOs above.
+**Partially done 2026-11-05:** the order detail shows the history (`order_events`).
+Still missing: the author on the card.
+
+**What:** Nothing on the board card tells you it moved because a colleague moved it.
 
 **Why:** Jira-style tools show it; a live board can feel like cards jump alone.
 
-**Effort:** M
+**Effort:** S
 **Priority:** P3
 **Depends on:** Pilot feedback.
 
@@ -174,6 +176,104 @@ flow shipping first — there's no real data to reconcile until then.
 **Effort:** M
 **Priority:** P3
 **Depends on:** Capture-flow slice shipping and being in use by Alejandra.
+
+## Fulfillment (order-to-delivery)
+
+### Phase 2: customer emails and tracking page
+
+**What:** Emails to the customer at key steps plus a public tracking page per order.
+
+**Why:** The customer stops asking by WhatsApp where the order is.
+
+**Context:** Spec 2026-11-04-order-fulfillment-e2e-design §10, §13.
+
+**Effort:** L
+**Priority:** P2
+**Depends on:** Fulfillment phase 1 shipped.
+
+### Phase 3: deliveries without signal
+
+**What:** Queue deliveries on the phone and send them when the connection returns.
+
+**Why:** Drivers lose signal on routes; today a failed upload has to be retried by hand.
+
+**Context:** Spec §13. `record_delivery` is already idempotent (phone-generated delivery id).
+
+**Effort:** M
+**Priority:** P2
+**Depends on:** Fulfillment phase 1 shipped.
+
+### Phase 4: DTE invoice
+
+**What:** Issue the DTE from a delivered order.
+
+**Why:** Hacienda requires it.
+
+**Context:** Spec §12, question 9 unanswered.
+
+**Effort:** L
+**Priority:** P2 — blocked
+**Depends on:** Spec question 9 (ECTEC's answer).
+
+### Phase 5: status configuration screen and per-company switches
+
+**What:** Admin screen to rename/reorder statuses and toggle process options per company.
+
+**Why:** Today statuses and `tenant_order_settings` are edited by SQL.
+
+**Context:** Spec §11; model in ADR-012.
+
+**Effort:** M
+**Priority:** P2
+**Depends on:** Fulfillment phase 1 shipped.
+
+### Optional photo on a failed delivery
+
+**What:** Keep a photo when the outcome is `failed`.
+
+**Why:** `record_delivery` stores no proofs for outcome failed (spec §6).
+
+**Context:** Needs a DB change in `record_delivery` and the driver form.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Fulfillment phase 1 shipped.
+
+### Prevent a duplicate pending-items order
+
+**What:** The server doesn't stop creating "pedido con lo pendiente" twice when the detail is reopened.
+
+**Why:** Two backorders for the same leftovers.
+
+**Context:** The client closes the detail after creating it, but a second tab or a retry gets through. Needs an event or column on the original order.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Fulfillment phase 1 shipped.
+
+### Per-company labels in the table and history
+
+**What:** `orders-table` and the `DEFAULT_STATUSES` fallback use ECTEC's names.
+
+**Why:** Another company would see ECTEC's labels.
+
+**Context:** Load `listOrderStatuses` and use its labels.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Fulfillment phase 1 shipped.
+
+### Orphan delivery-proof files
+
+**What:** When the driver changes the signature or photo after a partial upload, files stay under the old delivery id.
+
+**Why:** Storage clutter; no data leak (tenant-scoped paths).
+
+**Context:** The retry uses a new delivery id (9f55a98).
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Fulfillment phase 1 shipped.
 
 ## Roles / RBAC
 

@@ -49,6 +49,50 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"inventory_movements": {
+                  Row: {
+                    "created_at": string,"created_by": string | null,"id": string,"kind": string,"note": string | null,"order_id": string | null,"product_id": string,"quantity": number,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"created_by"?: string | null,"id"?: string,"kind": string,"note"?: string | null,"order_id"?: string | null,"product_id": string,"quantity": number,"tenant_id": string
+                  }
+                  Update: {
+                    "created_at"?: string,"created_by"?: string | null,"id"?: string,"kind"?: string,"note"?: string | null,"order_id"?: string | null,"product_id"?: string,"quantity"?: number,"tenant_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "inventory_movements_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inventory_movements_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inventory_movements_product_id_fkey"
+      columns: ["product_id"]
+isOneToOne: false
+      referencedRelation: "product_stock"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inventory_movements_product_id_fkey"
+      columns: ["product_id"]
+isOneToOne: false
+      referencedRelation: "products"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "inventory_movements_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"order_deliveries": {
                   Row: {
                     "amount_collected": number | null,"created_at": string,"driver_id": string | null,"failure_note": string | null,"failure_reason": string | null,"id": string,"order_id": string,"outcome": string,"payment_method": string | null,"photo_path": string | null,"receiver_name": string | null,"signature_path": string | null,"tenant_id": string
@@ -137,6 +181,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "users"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_items_product_tenant_fkey"
+      columns: ["tenant_id","product_id"]
+isOneToOne: false
+      referencedRelation: "product_stock"
+      referencedColumns: ["tenant_id","id"]
     },{
       foreignKeyName: "order_items_product_tenant_fkey"
       columns: ["tenant_id","product_id"]
@@ -330,7 +380,21 @@ isOneToOne: false
                 }
           }
           Views: {
-            [_ in never]: never
+            "product_stock": {
+                  Row: {
+                    "active": boolean,"id": string,"name": string,"stock": number | null,"tenant_id": string,"unit": string | null
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "products_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                }
           }
           Functions: {
             "assign_order":
@@ -574,6 +638,9 @@ isOneToOne: false
 "save_products":
 { Args: { "p_rows": Json }; Returns: Json
                            },
+"save_stock_movements":
+{ Args: { "p_rows": Json }; Returns: number
+                           },
 "search_customers":
 { Args: { "p_limit"?: number,"p_query": string }; Returns: {
               "active": boolean,
@@ -618,6 +685,9 @@ isOneToOne: false
       } },
 "seed_order_statuses":
 { Args: { "p_tenant_id": string }; Returns: undefined
+                           },
+"sync_order_inventory":
+{ Args: { "p_order_id": string }; Returns: undefined
                            },
 "tenant_id":
 { Args: Record<PropertyKey, never>; Returns: string

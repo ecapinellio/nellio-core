@@ -7,6 +7,7 @@ import type { Database } from "@/lib/supabase/database.types";
 import { searchProducts, quickAddProduct, updateProductPricing } from "@/lib/supabase/queries";
 import { UNIT_LABELS, PRODUCT_UNITS, type ProductUnit } from "@/lib/products/units";
 import { calculateLineTotal } from "@/lib/order-math";
+import { getStock } from "@/lib/inventory/stock";
 import { EntitySearch } from "@/components/capture/entity-search";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,8 @@ export function LineItems({ supabase, items, onAdd, onQuantityChange, onRemove, 
 	const [editPrice, setEditPrice] = useState("");
 	const [editUnit, setEditUnit] = useState<ProductUnit | "">("");
 	const [saving, setSaving] = useState(false);
+	// Warehouse stock per product, to warn (never block) when a line asks for more.
+	const [stock, setStock] = useState<Record<string, number>>({});
 
 	function startEditing(productId: string)
 	{
@@ -118,6 +121,14 @@ export function LineItems({ supabase, items, onAdd, onQuantityChange, onRemove, 
 										</button>
 									</div>
 
+									{item.productId in stock && item.quantity > stock[item.productId]
+										? (
+											<p className="text-xs font-medium text-status-pending">
+												⚠ En bodega hay {Math.max(stock[item.productId], 0)}{item.unit ? ` ${UNIT_LABELS[item.unit]}` : ""}. Se puede guardar igual.
+											</p>
+										)
+										: null}
+
 									{isEditing
 										? (
 											<div className="flex items-center gap-2 rounded-md bg-muted/50 p-2">
@@ -172,7 +183,11 @@ export function LineItems({ supabase, items, onAdd, onQuantityChange, onRemove, 
 				getLabel={(p) => p.name}
 				getId={(p) => p.id}
 				quickAddNoun="producto"
-				onSelect={(product) => onAdd(product.id, product.name, product.price_per_unit, product.unit as ProductUnit | null)}
+				onSelect={(product) =>
+				{
+					onAdd(product.id, product.name, product.price_per_unit, product.unit as ProductUnit | null);
+					getStock(supabase, [product.id]).then((s) => setStock((prev) => ({ ...prev, ...s })));
+				}}
 			/>
 		</div>
 	);

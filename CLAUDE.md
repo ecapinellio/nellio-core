@@ -59,7 +59,7 @@ de la app.
   los pedidos caóticos). **No son usuarios.** Nombre único por tenant (cada
   sucursal es su propio cliente); el NIT puede repetirse entre sucursales. Incluye datos fiscales del
   **receptor** del DTE (opcionales).
-- `products` — catálogo. Sin stock (inventario se modela post-discovery).
+- `products` — catálogo. El stock vive en `inventory_movements` (ADR-014).
 - `orders` — cabecera del pedido. Guarda el mensaje original en `notes`.
 - `order_items` — líneas del pedido. Tabla separada => varios productos por pedido.
 - `order_statuses` — estados del pedido **por empresa**: `key` y nombre propios,
@@ -69,9 +69,11 @@ de la app.
 - `order_deliveries` — cada intento de entrega: resultado (entregada / parcial /
   fallida), firma, receptor, foto y cobro.
 - `order_notifications` — cola de correos al cliente (ADR-013).
+- `inventory_movements` — entradas, conteos físicos y salidas/devoluciones por
+  pedido. El stock es la suma (vista `product_stock`) (ADR-014).
 
 ### Pendiente de modelar (después del discovery con Milo y Alejandra)
-- Inventario / stock / movimientos de inventario / bodegas
+- Varias bodegas, lotes/vencimiento, costo del inventario (hoy: una bodega, solo cantidades)
 - Tabla `dte` completa (firma, transmisión, sello de recepción)
 
 ---
@@ -234,6 +236,24 @@ El trigger se traga sus propios errores (`raise warning`). El link muere 30
 días después de entregado/cancelado. Sin `RESEND_API_KEY` la cola espera.
 `proxy.ts` excluye `t/` y `api/cron/`. Requiere plan Pro de Vercel (cron cada 5 min).
 
+### ADR-014: Inventario como historial de movimientos; el pedido descuenta al salir
+**Decisión:** el stock de cada producto es la suma de `inventory_movements`
+(una bodega, solo cantidades). Entradas y conteos físicos los registra solo el
+admin con `save_stock_movements()` (un conteo guarda la diferencia). Los
+pedidos mueven stock con un trigger (`sync_order_inventory()`) que compara lo
+que el pedido debería tener fuera según su estado con lo ya registrado y
+guarda la diferencia: antes de salir, entrega fallida o cancelado = 0; en
+camino = lo pedido; entregado = lo entregado + lo dañado (lo rechazado,
+faltante u "otro" regresa). Se permite stock negativo; captura solo avisa.
+**Por qué:** un número sin historial no se puede explicar ni corregir. El
+trigger de reconciliación cubre toda transición (incluida la corrección del
+admin) sin tocar cada función, y repetirlo no duplica movimientos. Bloquear
+por falta de stock frenaría al operador por un conteo desactualizado.
+**Consecuencias:** los pedidos que ya existían se registraron al migrar como
+"Pedido anterior al inventario"; el primer conteo fija el stock real. Toda
+transición nueva queda cubierta si cambia `orders.status` o las cantidades de
+`order_items`. `authenticated` no escribe la tabla (sin GRANT).
+
 ---
 
 ## Vistas del frontend por rol (Fase 1)
@@ -345,7 +365,9 @@ eventos por tenant, aislamiento, revocación), y el proceso de entrega
 parciales y fallidas, estadísticas por categoría, y la lógica pura de
 `lib/orders/` (fulfillment, delivery-form, driver-orders)), y los correos
 al cliente y el seguimiento público (cola por evento, envío con reintentos,
-`get_order_tracking()` y su caducidad).
+`get_order_tracking()` y su caducidad), y el inventario (entradas/conteos solo
+admin, descuento al salir, devoluciones por parcial/fallida/corrección, y el
+pegado de conteos de `lib/inventory/`).
 
 **CI:** `.github/workflows/test.yml` corre la suite en cada push/PR contra un
 stack de Supabase local efímero (sin secrets — son las keys demo locales).

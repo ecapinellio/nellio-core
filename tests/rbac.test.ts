@@ -28,9 +28,9 @@ describe("isRouteAllowed()", () =>
 		expect(isRouteAllowed("/orders", "driver")).toBe(false);
 	});
 
-	it("allows /products and /customers for admin and operator, not driver", () =>
+	it("allows /products, /customers and /inventory for admin and operator, not driver", () =>
 	{
-		for (const path of ["/products", "/customers"])
+		for (const path of ["/products", "/customers", "/inventory"])
 		{
 			expect(isRouteAllowed(path, "admin")).toBe(true);
 			expect(isRouteAllowed(path, "operator")).toBe(true);

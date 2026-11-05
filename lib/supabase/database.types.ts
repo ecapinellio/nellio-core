@@ -49,6 +49,38 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"order_deliveries": {
+                  Row: {
+                    "amount_collected": number | null,"created_at": string,"driver_id": string | null,"failure_note": string | null,"failure_reason": string | null,"id": string,"order_id": string,"outcome": string,"payment_method": string | null,"photo_path": string | null,"receiver_name": string | null,"signature_path": string | null,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount_collected"?: number | null,"created_at"?: string,"driver_id"?: string | null,"failure_note"?: string | null,"failure_reason"?: string | null,"id": string,"order_id": string,"outcome": string,"payment_method"?: string | null,"photo_path"?: string | null,"receiver_name"?: string | null,"signature_path"?: string | null,"tenant_id": string
+                  }
+                  Update: {
+                    "amount_collected"?: number | null,"created_at"?: string,"driver_id"?: string | null,"failure_note"?: string | null,"failure_reason"?: string | null,"id"?: string,"order_id"?: string,"outcome"?: string,"payment_method"?: string | null,"photo_path"?: string | null,"receiver_name"?: string | null,"signature_path"?: string | null,"tenant_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "order_deliveries_driver_id_fkey"
+      columns: ["driver_id"]
+isOneToOne: false
+      referencedRelation: "users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_deliveries_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_deliveries_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"order_events": {
                   Row: {
                     "action": string,"actor_id": string | null,"created_at": string,"from_status": string | null,"id": string,"note": string | null,"order_id": string,"payload": NonNullable<Json>,"reason": string | null,"tenant_id": string,"to_status": string
@@ -446,6 +478,9 @@ isOneToOne: false
         isOneToOne: true
         isSetofReturn: false
       } },
+"record_delivery":
+{ Args: { "p_amount_collected": number,"p_delivery_id": string,"p_failure_note": string,"p_failure_reason": string,"p_lines": Json,"p_order_id": string,"p_outcome": string,"p_payment_method": string,"p_photo_path": string,"p_receiver_name": string,"p_signature_path": string }; Returns: Json
+                           },
 "respond_to_assignment":
 { Args: { "p_accept": boolean,"p_expected_status": string,"p_order_id": string }; Returns: {
               "channel": string,

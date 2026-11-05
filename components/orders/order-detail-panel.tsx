@@ -91,7 +91,6 @@ export function OrderDetailPanel({ orderId, onClose, onSaved, isAdmin }: OrderDe
 	const [statuses, setStatuses] = useState<OrderStatusDef[]>(DEFAULT_STATUSES);
 	const [action, setAction] = useState<OpenAction | null>(null);
 	const [actionError, setActionError] = useState<string | null>(null);
-	const [notice, setNotice] = useState<string | null>(null);
 	const [creatingPending, setCreatingPending] = useState(false);
 
 	// The tenant's own status names and categories; the ECTEC defaults only if this fails.
@@ -180,14 +179,12 @@ export function OrderDetailPanel({ orderId, onClose, onSaved, isAdmin }: OrderDe
 		setConflict(false);
 		setConfirmingDiscard(false);
 		setActionError(null);
-		setNotice(null);
 		setAction(null);
 	}
 
 	function openAction(next: OpenAction)
 	{
 		setActionError(null);
-		setNotice(null);
 		setAction(next);
 	}
 
@@ -235,19 +232,21 @@ export function OrderDetailPanel({ orderId, onClose, onSaved, isAdmin }: OrderDe
 		}
 		setCreatingPending(true);
 		setActionError(null);
-		setNotice(null);
 		const { error } = await createOrder(supabase, {
 			customer_id: detail.customerId,
 			notes: pendingNote(detail.createdAt),
 			items: lines.map((l) => ({ product_id: l.productId, quantity: l.quantity })),
 		});
-		setCreatingPending(false);
 		if (error)
 		{
+			setCreatingPending(false);
 			setActionError("No se pudo crear el pedido pendiente. Intenta de nuevo.");
 			return;
 		}
-		setNotice("Se creó un pedido nuevo con lo pendiente. Aparece en la columna Pedido.");
+		// Closing (like the other actions) removes the button, so it can't be clicked twice.
+		setCreatingPending(false);
+		reset();
+		onSaved();
 	}
 
 	function attemptClose()
@@ -445,8 +444,7 @@ export function OrderDetailPanel({ orderId, onClose, onSaved, isAdmin }: OrderDe
 										)
 										: null}
 
-									{notice ? <p role="status" className="text-sm font-medium">{notice}</p> : null}
-									{actionError
+													{actionError
 										? (
 											<Alert variant="destructive">
 												<AlertTriangle />

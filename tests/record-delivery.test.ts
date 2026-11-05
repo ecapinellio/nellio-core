@@ -160,6 +160,36 @@ describe("record_delivery", () =>
 		}
 	});
 
+	it("driver total after a partial delivery counts only what was delivered", async () =>
+	{
+		const { id, items } = await pickedUp([4]);
+		const did = crypto.randomUUID();
+		const r = await call(tenant.driver, id, {
+			p_delivery_id: did, p_receiver_name: "Ana", p_signature_path: await upload(did),
+			p_lines: [{ order_item_id: items[0].id, delivered_quantity: 3, reason: "short" }],
+		});
+		expect(r.error).toBeNull();
+		const { data } = await tenant.driver.rpc("list_driver_orders");
+		expect((data as unknown as Row[]).find((o) => o.id === id)!.total).toBe(30);
+	});
+
+	it("delivering keeps an invoice_status that is not 'not_invoiced'", async () =>
+	{
+		const { id, items } = await pickedUp([4]);
+		expect((await tenant.service.from("orders").update({ invoice_status: "error" }).eq("id", id)).error).toBeNull();
+		const did = crypto.randomUUID();
+		const r = await call(tenant.driver, id, { p_delivery_id: did, p_receiver_name: "Ana", p_signature_path: await upload(did), p_lines: full(items) });
+		expect(r.error).toBeNull();
+		expect((await row("orders", id))[0].invoice_status).toBe("error");
+	});
+
+	it("storage rejects non-image uploads", async () =>
+	{
+		const path = `${tenant.tenantId}/${crypto.randomUUID()}/photo.jpg`;
+		const { error } = await tenant.driver.storage.from("delivery-proofs").upload(path, new Blob(["hello"], { type: "text/plain" }), { contentType: "text/plain" });
+		expect(error).not.toBeNull();
+	});
+
 	it("recordDelivery() wrapper: a short line becomes partially_delivered on the server", async () =>
 	{
 		const { id, items } = await pickedUp([10]);

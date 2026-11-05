@@ -209,8 +209,9 @@ funciones `security definer` (`assign_order`, `respond_to_assignment`,
 el código no puede depender de claves. Las categorías dan estadísticas y reglas
 comparables entre empresas. Las funciones validan la transición y escriben el
 historial en la misma transacción; un PATCH directo se las saltaría.
-**Consecuencias:** `authenticated` no tiene GRANT de UPDATE/INSERT sobre las
-columnas de estado/entrega de `orders` ni sobre `order_items`. Toda acción nueva
+**Consecuencias:** `authenticated` no tiene GRANT de UPDATE/INSERT solo sobre
+las columnas de estado/chofer/entrega de `orders` ni sobre `order_items.delivered_quantity`
+y `shortfall_*` (conserva los GRANT de columnas de producto/cantidad/precio/unidad). Toda acción nueva
 busca su estado por `step` (`order_status_for_step()`), nunca por clave ni por
 nombre. Las políticas de lectura del chofer filtran por `category`. Pendiente:
 pantalla para editar los estados (TODOS, fase 5).
@@ -271,7 +272,7 @@ verificación en backend.
 - Probar las políticas RLS **desde la app logueado**, no desde el SQL Editor
   (el editor salta el RLS y muestra todas las filas).
 - Cambios de estado de pedidos solo por funciones security definer
-  (`assign_order`, …); columnas de estado/entrega sin GRANT para `authenticated`.
+  (`assign_order`, …); columnas de estado/entrega de `orders` sin GRANT para `authenticated`.
 - Toda tabla nueva con `tenant_id`: activar RLS y crear la política de aislamiento.
 - Indexar siempre `tenant_id`.
 - Columnas de auditoría (quién creó / quién cambió / cuándo:

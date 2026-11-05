@@ -126,9 +126,9 @@ export function DriverOrders({ tenantId }: { tenantId: string })
 	const groups = groupDriverOrders(orders, statuses, settings.require_driver_acceptance);
 	const empty = orders.length === 0;
 
-	function card(order: DriverOrder, actions?: React.ReactNode)
+	function card(order: DriverOrder, actions?: React.ReactNode, closed = false)
 	{
-		return <OrderCard key={order.id} order={order} def={statuses.find((s) => s.key === order.status)} actions={actions} />;
+		return <OrderCard key={order.id} order={order} def={statuses.find((s) => s.key === order.status)} actions={actions} closed={closed} />;
 	}
 
 	return (
@@ -179,7 +179,7 @@ export function DriverOrders({ tenantId }: { tenantId: string })
 			</Section>
 
 			<Section title="Cerrados (últimos 7 días)" orders={groups.closed}>
-				{(order) => card(order)}
+				{(order) => card(order, undefined, true)}
 			</Section>
 
 			<DeliverySheet
@@ -226,7 +226,7 @@ function ActionButton({ busy, variant, children, ...props }: React.ComponentProp
 	);
 }
 
-function OrderCard({ order, def, actions }: { order: DriverOrder; def: OrderStatusDef | undefined; actions?: React.ReactNode })
+function OrderCard({ order, def, actions, closed }: { order: DriverOrder; def: OrderStatusDef | undefined; actions?: React.ReactNode; closed: boolean })
 {
 	const { customer } = order;
 	return (
@@ -258,7 +258,7 @@ function OrderCard({ order, def, actions }: { order: DriverOrder; def: OrderStat
 				))}
 			</ul>
 			<p className="flex justify-between border-t border-border pt-2 text-sm">
-				<span className="text-muted-foreground">Total a cobrar</span>
+				<span className="text-muted-foreground">{closed ? "Total entregado" : "Total a cobrar"}</span>
 				<span className="font-mono font-semibold tabular-nums">{order.total === null ? "—" : `$${order.total.toFixed(2)}`}</span>
 			</p>
 			{actions ? <div className="flex gap-2">{actions}</div> : null}

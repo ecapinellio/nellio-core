@@ -189,7 +189,7 @@ begin
       ), '[]'::jsonb),
       'total', (
         select case when count(*) = 0 or bool_or(i.price_at_order is null) then null
-                    else sum(i.quantity * i.price_at_order) end
+                    else sum(coalesce(i.delivered_quantity, i.quantity) * i.price_at_order) end
         from public.order_items i where i.order_id = o.id
       ),
       'attempt', (select count(*) from public.order_events e where e.order_id = o.id and e.action = 'pick_up')

@@ -88,12 +88,13 @@ describe("office transitions", () =>
 
 	it("assign rejects inactive, foreign or non-driver users", async () =>
 	{
-		const { data: u } = await tenant.service.auth.admin.createUser({
+		const { data: u, error: ue } = await tenant.service.auth.admin.createUser({
 			email: `d3-${crypto.randomUUID()}@test.local`, password: "Nellio-Test-Pass-2026!", email_confirm: true,
 			app_metadata: { tenant_id: tenant.tenantId, role: "driver" },
 		});
-		await tenant.service.from("users").insert({ id: u.user!.id, tenant_id: tenant.tenantId, name: "D3", role: "driver" });
-		await tenant.service.auth.admin.updateUserById(u.user!.id, { ban_duration: "24h" });
+		expect(ue).toBeNull();
+		expect((await tenant.service.from("users").insert({ id: u.user!.id, tenant_id: tenant.tenantId, name: "D3", role: "driver" })).error).toBeNull();
+		expect((await tenant.service.auth.admin.updateUserById(u.user!.id, { ban_duration: "24h" })).error).toBeNull();
 		const id = await fresh();
 		for (const driver of [u.user!.id, other.driverId, tenant.operatorId, crypto.randomUUID()])
 		{
@@ -207,9 +208,15 @@ describe("office transitions", () =>
 		const { data, error } = await tenant.operator.rpc("list_tenant_drivers");
 		expect(error).toBeNull();
 		expect(data).toEqual([{ id: tenant.driverId, name: expect.any(String), active: true }]);
-		await tenant.service.auth.admin.updateUserById(tenant.driverId, { ban_duration: "24h" });
-		const { data: after } = await tenant.admin.rpc("list_tenant_drivers");
-		expect(after![0].active).toBe(false);
-		await tenant.service.auth.admin.updateUserById(tenant.driverId, { ban_duration: "none" });
+		expect((await tenant.service.auth.admin.updateUserById(tenant.driverId, { ban_duration: "24h" })).error).toBeNull();
+		try
+		{
+			const { data: after } = await tenant.admin.rpc("list_tenant_drivers");
+			expect(after![0].active).toBe(false);
+		}
+		finally
+		{
+			await tenant.service.auth.admin.updateUserById(tenant.driverId, { ban_duration: "none" });
+		}
 	});
 });

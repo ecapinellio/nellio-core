@@ -232,6 +232,8 @@ describe("live /orders (ADR-010)", () =>
 
 	it("stops telling a deactivated user (ADR-009)", async () =>
 	{
+		await reset();
+		expect((await assign("AM", "pending")).error).toBeNull();
 		const control = await listen(tenant.operator, tenant.tenantId);
 		const received = await listen(tenant.driver, tenant.tenantId);
 		expect((await service.auth.admin.updateUserById(tenant.driverId, { ban_duration: "1h" })).error).toBeNull();
@@ -244,7 +246,8 @@ describe("live /orders (ADR-010)", () =>
 		}
 		finally
 		{
+			await service.auth.admin.updateUserById(tenant.driverId, { ban_duration: "none" });
 			await stop();
 		}
-	});
+	}, 30_000);
 });

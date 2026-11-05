@@ -253,7 +253,7 @@ flow shipping first — there's no real data to reconcile until then.
 
 ### Per-company labels in the table and history
 
-**What:** `orders-table` and the `DEFAULT_STATUSES` fallback use ECTEC's names.
+**What:** The `DEFAULT_STATUSES` fallback (`order-status-badge.tsx`, `order-detail-panel.tsx`) uses ECTEC's names.
 
 **Why:** Another company would see ECTEC's labels.
 

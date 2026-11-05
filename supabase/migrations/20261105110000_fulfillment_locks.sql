@@ -83,7 +83,8 @@ security definer
 set search_path = ''
 as $$
 begin
-  update public.orders set updated_at = now() where id = new.order_id;
+  -- once per transaction: a multi-line save must not fire one realtime event per line
+  update public.orders set updated_at = now() where id = new.order_id and updated_at is distinct from now();
   return null;
 end;
 $$;

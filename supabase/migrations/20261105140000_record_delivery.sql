@@ -33,8 +33,9 @@ grant select on public.order_deliveries to authenticated;
 -- Storage: private bucket for signatures and photos
 -- Paths: {tenant_id}/{delivery_id}/signature.png | photo.jpg
 -- ============================================================
-insert into storage.buckets (id, name, public) values ('delivery-proofs', 'delivery-proofs', false)
-on conflict do nothing;
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('delivery-proofs', 'delivery-proofs', false, 5242880, '{image/png,image/jpeg}')
+on conflict (id) do update set file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
 
 create policy delivery_proofs_insert on storage.objects
   for insert to authenticated
@@ -277,7 +278,8 @@ begin
 
   update public.orders
   set status = public.order_status_for_step(v_tenant_id, v_to_step),
-      invoice_status = 'pending', status_changed_at = now()
+      invoice_status = case when invoice_status = 'not_invoiced' then 'pending' else invoice_status end,
+      status_changed_at = now()
   where id = v_order.id
   returning * into v_order;
   perform public.log_order_event(v_order, 'deliver', v_from, null, null,

@@ -106,7 +106,7 @@ function DeliveryForm({
 		}
 		catch
 		{
-			setErrors(["No se pudo leer la foto. Toma otra."]);
+			setErrors(["No se pudo leer la foto (debe ser JPEG o PNG de máx. 5 MB). Toma otra."]);
 		}
 	}
 

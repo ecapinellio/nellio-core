@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, History, ListOrdered, Package, PlusCircle, Users } from "lucide-react";
+import { Building2, History, ListOrdered, Package, PlusCircle, Truck, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isRouteAllowed } from "@/lib/rbac";
 
 const navItems = [
+	{ href: "/deliveries", label: "Entregas", icon: Truck },
 	{ href: "/orders/capture", label: "Capturar pedido", icon: PlusCircle },
 	{ href: "/orders", label: "Pedidos", icon: ListOrdered },
 	{ href: "/orders/historial", label: "Mis pedidos", icon: History },

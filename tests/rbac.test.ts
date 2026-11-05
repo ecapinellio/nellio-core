@@ -20,6 +20,14 @@ describe("isRouteAllowed()", () =>
 		}
 	});
 
+	it("allows /deliveries for driver only", () =>
+	{
+		expect(isRouteAllowed("/deliveries", "driver")).toBe(true);
+		expect(isRouteAllowed("/deliveries", "admin")).toBe(false);
+		expect(isRouteAllowed("/deliveries", "operator")).toBe(false);
+		expect(isRouteAllowed("/orders", "driver")).toBe(false);
+	});
+
 	it("allows /products and /customers for admin and operator, not driver", () =>
 	{
 		for (const path of ["/products", "/customers"])

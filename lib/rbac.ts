@@ -36,6 +36,8 @@ const ROUTE_RULES: readonly RouteRule[] = [
 	// Catalog and customers: same roles as their RLS policies.
 	{ prefix: "/products", roles: ["admin", "operator"] },
 	{ prefix: "/customers", roles: ["admin", "operator"] },
+	// Driver app: their own assigned orders.
+	{ prefix: "/deliveries", roles: ["driver"] },
 	// Reserved namespace for admin-only views ("Administración" row).
 	{ prefix: "/admin", roles: ["admin"] },
 ];

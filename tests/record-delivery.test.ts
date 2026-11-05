@@ -210,6 +210,9 @@ describe("record_delivery", () =>
 		await bad([{ order_item_id: a.id, delivered_quantity: 10 }, { order_item_id: a.id, delivered_quantity: 10 }], "duplicate line");
 		await bad([{ order_item_id: a.id, delivered_quantity: 5 }, { order_item_id: b.id, delivered_quantity: 4 }], "shortfall without reason");
 		await bad([{ order_item_id: a.id, delivered_quantity: 5, reason: "nope" }, { order_item_id: b.id, delivered_quantity: 4 }], "bad reason");
+		await bad([{ order_item_id: a.id }, { order_item_id: b.id, delivered_quantity: 4 }], "missing delivered_quantity key");
+		await bad([{ order_item_id: a.id, delivered_quantity: null }, { order_item_id: b.id, delivered_quantity: 4 }], "null delivered_quantity");
+		await bad([{ delivered_quantity: 10 }, { order_item_id: b.id, delivered_quantity: 4 }], "missing order_item_id");
 		await bad({ order_item_id: a.id }, "not an array");
 		await bad([{ order_item_id: "x", delivered_quantity: 1 }, { order_item_id: b.id, delivered_quantity: 4 }], "bad id");
 		expect((await row("order_deliveries", id, "order_id"))).toHaveLength(0);

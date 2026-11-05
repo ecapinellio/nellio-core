@@ -213,7 +213,7 @@ begin
     end if;
   end loop;
 
-  if p_lines is null or jsonb_typeof(p_lines) <> 'array' then
+  if p_lines is null or jsonb_typeof(p_lines) is distinct from 'array' then
     raise exception 'Lines must be an array' using errcode = '22023';
   end if;
   select count(*) into v_item_count from public.order_items i where i.order_id = v_order.id;
@@ -223,9 +223,10 @@ begin
 
   for v_line in select * from jsonb_array_elements(p_lines)
   loop
-    if jsonb_typeof(v_line) <> 'object'
-       or jsonb_typeof(v_line -> 'order_item_id') <> 'string'
-       or jsonb_typeof(v_line -> 'delivered_quantity') <> 'number'
+    -- is distinct from: a missing key gives NULL typeof, and NULL <> 'x' would skip the check.
+    if jsonb_typeof(v_line) is distinct from 'object'
+       or jsonb_typeof(v_line -> 'order_item_id') is distinct from 'string'
+       or jsonb_typeof(v_line -> 'delivered_quantity') is distinct from 'number'
        or (v_line ->> 'order_item_id') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
       raise exception 'Invalid line' using errcode = '22023';
     end if;

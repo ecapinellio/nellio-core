@@ -1,20 +1,20 @@
 import { forwardRef } from "react";
 import type { ReactNode } from "react";
-import type { OrderStatus } from "@/lib/order-math";
+import type { OrderStatusDef } from "@/lib/orders/fulfillment";
 import { OrderStatusBadge } from "@/components/orders/order-status-badge";
 import { cn } from "@/lib/utils";
 
 interface KanbanColumnProps
 {
-	status: OrderStatus;
+	status: OrderStatusDef;
 	count: number;
-	/** True while a dragged card is hovering this column (@dnd-kit's useDroppable, wired in OrdersKanban/S3f) — drives the dashed drop-target border. */
+	/** True while a dragged card is hovering a column that accepts it — drives the dashed drop-target border. */
 	isOver?: boolean;
 	children: ReactNode;
 }
 
 /**
- * Generic, rendered 4x (one per OrderStatus) by OrdersKanban. Stays free of
+ * Generic, rendered once per tenant status by OrdersKanban. Stays free of
  * any @dnd-kit import — the drop-target ref and isOver state are supplied
  * by the caller (useDroppable lives in S3f), same split as OrderCard/S3d.
  *
@@ -29,7 +29,7 @@ export const KanbanColumn = forwardRef<HTMLDivElement, KanbanColumnProps>(functi
 	return (
 		<div className="flex h-full min-w-[280px] flex-1 flex-col rounded-lg border border-border bg-muted/30">
 			<div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
-				<OrderStatusBadge status={status} />
+				<OrderStatusBadge status={status.key} def={status} />
 				<span className="font-mono text-xs tabular-nums text-muted-foreground">{count}</span>
 			</div>
 

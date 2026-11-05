@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateLineTotal, calculateOrderTotal, applyPendingMoves, groupOrdersByStatus, nextStatusAction } from "@/lib/order-math";
+import { calculateLineTotal, calculateOrderTotal } from "@/lib/order-math";
 
 describe("calculateLineTotal", () =>
 {
@@ -60,60 +60,5 @@ describe("calculateOrderTotal", () =>
 	it("returns total 0, unpricedCount 0 for an empty order", () =>
 	{
 		expect(calculateOrderTotal([])).toEqual({ total: 0, unpricedCount: 0 });
-	});
-});
-
-describe("nextStatusAction", () =>
-{
-	it("walks the pipeline and stops at delivered", () =>
-	{
-		expect(nextStatusAction("pending")).toEqual({ status: "confirmed", label: "Confirmar" });
-		expect(nextStatusAction("confirmed")).toEqual({ status: "dispatched", label: "Despachar" });
-		expect(nextStatusAction("dispatched")).toEqual({ status: "delivered", label: "Entregar" });
-		expect(nextStatusAction("delivered")).toBeNull();
-	});
-});
-
-describe("applyPendingMoves", () =>
-{
-	it("keeps in-flight moves over a list fetched before they landed", () =>
-	{
-		const fetched = [{ id: "a", status: "pending" }, { id: "b", status: "pending" }];
-		expect(applyPendingMoves(fetched, new Map([["a", "confirmed" as const]]))).toEqual([
-			{ id: "a", status: "confirmed" },
-			{ id: "b", status: "pending" },
-		]);
-		expect(applyPendingMoves(fetched, new Map())).toEqual(fetched);
-	});
-});
-
-describe("groupOrdersByStatus", () =>
-{
-	it("buckets orders into their matching status column", () =>
-	{
-		const orders = [
-			{ id: "1", status: "pending" },
-			{ id: "2", status: "confirmed" },
-			{ id: "3", status: "pending" },
-			{ id: "4", status: "dispatched" },
-			{ id: "5", status: "delivered" },
-		];
-		const groups = groupOrdersByStatus(orders);
-		expect(groups.pending.map((o) => o.id)).toEqual(["1", "3"]);
-		expect(groups.confirmed.map((o) => o.id)).toEqual(["2"]);
-		expect(groups.dispatched.map((o) => o.id)).toEqual(["4"]);
-		expect(groups.delivered.map((o) => o.id)).toEqual(["5"]);
-	});
-
-	it("returns all 4 columns as empty arrays for an empty order list", () =>
-	{
-		expect(groupOrdersByStatus([])).toEqual({ pending: [], confirmed: [], dispatched: [], delivered: [] });
-	});
-
-	it("drops an order with an unrecognized status instead of throwing", () =>
-	{
-		const orders = [{ id: "1", status: "unknown_status" }];
-		const groups = groupOrdersByStatus(orders);
-		expect(groups).toEqual({ pending: [], confirmed: [], dispatched: [], delivered: [] });
 	});
 });

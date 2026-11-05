@@ -1,21 +1,20 @@
 import { StatusBadge } from "@/components/status-badge";
-import { ORDER_STATUS_LABELS } from "@/lib/order-math";
+import { DEFAULT_STATUSES, statusColor } from "@/lib/orders/board";
+import type { OrderStatusDef } from "@/lib/orders/fulfillment";
 
-const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-	pending: { label: ORDER_STATUS_LABELS.pending, color: "var(--status-pending)" },
-	confirmed: { label: ORDER_STATUS_LABELS.confirmed, color: "var(--status-confirmed)" },
-	dispatched: { label: ORDER_STATUS_LABELS.dispatched, color: "var(--status-dispatched)" },
-	delivered: { label: ORDER_STATUS_LABELS.delivered, color: "var(--status-delivered)" },
-};
-
-export function OrderStatusBadge({ status }: { status: string })
+/**
+ * `def` is the tenant's status when the caller has the list (the board);
+ * without it the ECTEC defaults name the common keys. A key in neither
+ * renders as is rather than failing.
+ */
+export function OrderStatusBadge({ status, def }: { status: string; def?: OrderStatusDef })
 {
-	const config = STATUS_CONFIG[status];
+	const resolved = def ?? DEFAULT_STATUSES.find((s) => s.key === status);
 
-	if (!config)
+	if (!resolved)
 	{
 		return <span className="text-sm text-muted-foreground">{status}</span>;
 	}
 
-	return <StatusBadge label={config.label} color={config.color} />;
+	return <StatusBadge label={resolved.label} color={statusColor(resolved)} />;
 }

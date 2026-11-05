@@ -1,15 +1,21 @@
 import { forwardRef } from "react";
 import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from "react";
-import { GripVertical } from "lucide-react";
+import { AlertTriangle, GripVertical } from "lucide-react";
 import type { KanbanOrder } from "@/lib/supabase/queries";
 import { calculateOrderTotal } from "@/lib/order-math";
 import { formatOrderTimestamp } from "@/lib/format";
+import { cardNotes, formatDeliveryDate } from "@/lib/orders/board";
+import type { OrderStatusDef } from "@/lib/orders/fulfillment";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface OrderCardProps
 {
 	order: KanbanOrder;
+	/** The order's status in the tenant's list, for the driver/acceptance notes. */
+	status?: OrderStatusDef;
+	/** Ticks every minute on the board so "sin aceptar desde hace N h" keeps counting. */
+	now?: Date;
 	showConfirmButton?: boolean;
 	onConfirm?: () => void;
 	/** Slice 4: click on the card body (not the grip handle, not Confirmar) opens the detail panel. */
@@ -33,6 +39,16 @@ interface OrderCardProps
 
 const MAX_VISIBLE_ITEMS = 3;
 
+function CardWarning({ color, children }: { color: string; children: ReactNode })
+{
+	return (
+		<p className="flex items-center gap-1.5 border-l-[3px] pl-2 text-xs font-semibold" style={{ borderColor: color }}>
+			<AlertTriangle className="size-3.5 shrink-0" style={{ color }} />
+			{children}
+		</p>
+	);
+}
+
 /**
  * Presentational only — drag wiring (ref/listeners/attributes from
  * @dnd-kit's useSortable) is spread in by OrdersKanban (S3f), not imported
@@ -44,7 +60,7 @@ const MAX_VISIBLE_ITEMS = 3;
  * on the root, not a hover treatment.
  */
 export const OrderCard = forwardRef<HTMLDivElement, OrderCardProps>(function OrderCard(
-	{ order, showConfirmButton, onConfirm, onOpenDetail, isDragging, style, className, dragHandleProps, actions },
+	{ order, status, now, showConfirmButton, onConfirm, onOpenDetail, isDragging, style, className, dragHandleProps, actions },
 	ref,
 )
 {
@@ -54,6 +70,7 @@ export const OrderCard = forwardRef<HTMLDivElement, OrderCardProps>(function Ord
 	const allUnpriced = order.items.length > 0 && unpricedCount === order.items.length;
 	const visibleItems = order.items.slice(0, MAX_VISIBLE_ITEMS);
 	const extraCount = order.items.length - visibleItems.length;
+	const notes = cardNotes(order, status, now ?? new Date());
 
 	return (
 		<div
@@ -100,6 +117,25 @@ export const OrderCard = forwardRef<HTMLDivElement, OrderCardProps>(function Ord
 					</div>
 				)
 				: null}
+
+			{order.driverName || order.deliveryDate
+				? (
+					<p className="truncate text-xs text-muted-foreground">
+						{[
+							order.driverName,
+							order.deliveryDate ? formatDeliveryDate(order.deliveryDate) : null,
+							order.deliveryWindow,
+						].filter(Boolean).join(" · ")}
+					</p>
+				)
+				: null}
+
+			{notes.failed ? <CardWarning color="var(--destructive)">Entrega fallida: reprograma o cancela</CardWarning> : null}
+			{notes.noDriver ? <CardWarning color="var(--status-pending)">Sin chofer</CardWarning> : null}
+			{notes.unacceptedHours !== null
+				? <CardWarning color="var(--status-pending)">Sin aceptar desde hace {notes.unacceptedHours} h</CardWarning>
+				: null}
+			{notes.attempt !== null ? <p className="text-xs font-semibold">Intento {notes.attempt}</p> : null}
 
 			<div className="border-t border-border pt-2">
 				{allUnpriced

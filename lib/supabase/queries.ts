@@ -1,6 +1,5 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json, Tables } from "@/lib/supabase/database.types";
-import type { OrderStatus } from "@/lib/order-math";
 import type { ProductUnit } from "@/lib/products/units";
 import type { OrderStatusDef } from "@/lib/orders/fulfillment";
 
@@ -432,34 +431,6 @@ export async function listOrdersForKanban(supabase: Client): Promise<QueryResult
 	}));
 
 	return { data: orders, error: null };
-}
-
-/**
- * @deprecated — replaced in Task 7. Direct status writes are revoked for API
- * roles (20261105110000): use assignOrder() and the other transition RPCs.
- *
- * Drag-or-"Confirmar" status change. Direct update, not a new RPC — RLS
- * already permits admin/operator to update orders (T8's role matrix), and
- * there's no multi-table write here that would need create_order()'s
- * atomicity guarantees.
- */
-export async function updateOrderStatus(
-	supabase: Client,
-	orderId: string,
-	status: OrderStatus,
-	expectedStatus?: string,
-): Promise<QueryResult<Order>>
-{
-	let query = supabase.from("orders").update({ status }).eq("id", orderId);
-	// Any → any stays allowed (Decision 4), but only from the status the user
-	// saw: the board doesn't live-update, so one tap on a stale card would
-	// otherwise undo a colleague's move. A mismatch is PGRST116, like RLS.
-	if (expectedStatus !== undefined)
-	{
-		query = query.eq("status", expectedStatus);
-	}
-	const { data, error } = await query.select().single();
-	return { data, error };
 }
 
 export interface OrderDetailItem

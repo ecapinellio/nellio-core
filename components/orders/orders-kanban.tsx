@@ -17,8 +17,10 @@ import { CSS } from "@dnd-kit/utilities";
 import { useOrdersLive } from "@/hooks/use-orders-live";
 import { useRefreshOnReturn } from "@/hooks/use-refresh-on-return";
 import { createClient } from "@/lib/supabase/client";
-import { listOrdersForKanban, updateOrderStatus, type KanbanOrder } from "@/lib/supabase/queries";
-import { ORDER_STATUSES, applyPendingMoves, groupOrdersByStatus, isOrderStatus, type OrderStatus } from "@/lib/order-math";
+import { listOrderStatuses, listOrdersForKanban, type KanbanOrder } from "@/lib/supabase/queries";
+import { boardColumns, groupOrdersByColumn } from "@/lib/orders/board";
+import { canOfficeDrag, type OrderStatusDef } from "@/lib/orders/fulfillment";
+import { AssignOrderPanel, type AssignOutcome } from "@/components/orders/assign-order-panel";
 import { KanbanColumn } from "@/components/orders/kanban-column";
 import { OrderCard } from "@/components/orders/order-card";
 import { OrderDetailPanel } from "@/components/orders/order-detail-panel";
@@ -26,28 +28,37 @@ import { OrdersMobileBoard } from "@/components/orders/orders-mobile-board";
 
 function SortableOrderCard({
 	order,
+	status,
+	now,
+	draggable,
 	showConfirmButton,
 	onConfirm,
 	onOpenDetail,
 }: {
 	order: KanbanOrder;
+	status: OrderStatusDef;
+	now: Date;
+	/** Only a not-yet-confirmed order can be dragged (canOfficeDrag); the rest are read-only. */
+	draggable: boolean;
 	showConfirmButton: boolean;
 	onConfirm: () => void;
 	onOpenDetail: () => void;
 })
 {
-	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: order.id });
+	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: order.id, disabled: !draggable });
 
 	return (
 		<OrderCard
 			ref={setNodeRef}
 			order={order}
+			status={status}
+			now={now}
 			showConfirmButton={showConfirmButton}
 			onConfirm={onConfirm}
 			onOpenDetail={onOpenDetail}
 			isDragging={isDragging}
 			style={{ transform: CSS.Transform.toString(transform), transition: transition ?? undefined }}
-			dragHandleProps={{ ...attributes, ...listeners }}
+			dragHandleProps={draggable ? { ...attributes, ...listeners } : undefined}
 		/>
 	);
 }
@@ -55,25 +66,33 @@ function SortableOrderCard({
 function DroppableColumn({
 	status,
 	orders,
+	now,
+	accepts,
 	onConfirm,
 	onOpenDetail,
 }: {
-	status: OrderStatus;
+	status: OrderStatusDef;
 	orders: KanbanOrder[];
+	now: Date;
+	/** Whether the card being dragged may land here; with no drag in progress, nothing is highlighted. */
+	accepts: boolean;
 	onConfirm: (orderId: string) => void;
 	onOpenDetail: (orderId: string) => void;
 })
 {
-	const { setNodeRef, isOver } = useDroppable({ id: status });
+	const { setNodeRef, isOver } = useDroppable({ id: status.key, disabled: !accepts });
 
 	return (
-		<KanbanColumn ref={setNodeRef} status={status} count={orders.length} isOver={isOver}>
+		<KanbanColumn ref={setNodeRef} status={status} count={orders.length} isOver={isOver && accepts}>
 			<SortableContext items={orders.map((order) => order.id)} strategy={verticalListSortingStrategy}>
 				{orders.map((order) => (
 					<SortableOrderCard
 						key={order.id}
 						order={order}
-						showConfirmButton={status === "pending"}
+						status={status}
+						now={now}
+						draggable={status.step === "created"}
+						showConfirmButton={status.step === "created"}
 						onConfirm={() => onConfirm(order.id)}
 						onOpenDetail={() => onOpenDetail(order.id)}
 					/>
@@ -86,27 +105,34 @@ function DroppableColumn({
 /**
  * over.id from @dnd-kit can be either a column id (dropped in empty space)
  * or another card's id (dropped near/on a card) — resolve to the column's
- * status either way.
+ * status key either way.
  */
-function resolveTargetStatus(overId: string, orders: KanbanOrder[]): OrderStatus | null
+function resolveTargetKey(overId: string, columns: OrderStatusDef[], orders: KanbanOrder[]): string | null
 {
-	if (isOrderStatus(overId))
+	if (columns.some((c) => c.key === overId))
 	{
 		return overId;
 	}
-	const target = orders.find((order) => order.id === overId);
-	return target && isOrderStatus(target.status) ? target.status : null;
+	return orders.find((order) => order.id === overId)?.status ?? null;
 }
 
 const ERROR_MS = 8000;
-const CHANGED_MESSAGE = "Este pedido cambió mientras tenías la pantalla abierta. Revisa su estado actual.";
+const CHANGED_MESSAGE = "Alguien cambió este pedido. Ya se actualizó el tablero.";
+const CLOCK_MS = 60_000;
+
+interface Board
+{
+	orders: KanbanOrder[];
+	statuses: OrderStatusDef[];
+}
 
 interface OrdersKanbanProps
 {
 	/**
-	 * Fired after any change that could affect the stats dashboard (status
-	 * move or a dialog save) — OrderStats is a sibling with its own fetch,
-	 * it has no way to know this board just mutated data unless told.
+	 * Fired after any change that could affect the stats dashboard (an
+	 * assignment, a dialog save, or someone else's change arriving) —
+	 * OrderStats is a sibling with its own fetch, it has no way to know this
+	 * board just changed unless told.
 	 */
 	onOrderChanged?: () => void;
 	/** From the JWT, picks the live channel; RLS still decides what arrives (ADR-010). */
@@ -114,50 +140,42 @@ interface OrdersKanbanProps
 }
 
 /**
- * Eng-review Decision 4: any column → any column, no transition validation.
- * RLS/role (T8) already gates WHO can move a card; the sequence they move
- * it in isn't enforced here.
+ * The office only moves Pedido -> Confirmado (canOfficeDrag), and that opens
+ * the driver/window panel: the card stays in Pedido until it's saved. Every
+ * other column shows what drivers do, read-only, and follows it live.
  */
 export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 {
 	const supabase = useMemo(() => createClient(), []);
-	const [orders, setOrders] = useState<KanbanOrder[] | null>(null);
+	const [board, setBoard] = useState<Board | null>(null);
 	const [loadError, setLoadError] = useState(false);
 	const [actionError, setActionError] = useState<string | null>(null);
 	const [activeId, setActiveId] = useState<string | null>(null);
 	const [openOrderId, setOpenOrderId] = useState<string | null>(null);
-	const pendingMoves = useRef(new Map<string, OrderStatus>());
-	// Bumped when a move starts or lands: a refetch that spans one re-reads.
-	const movesVersion = useRef(0);
+	const [assignOrderId, setAssignOrderId] = useState<string | null>(null);
+	const [now, setNow] = useState(() => new Date());
 	const refreshSequence = useRef(0);
 	const dragging = useRef(false);
 	const refreshAfterDrag = useRef(false);
 	const loaded = useRef(false);
-	const shownOrders = useRef<KanbanOrder[] | null>(null);
+	const shownBoard = useRef<Board | null>(null);
 
 	useEffect(() =>
 	{
-		shownOrders.current = orders;
-	}, [orders]);
+		shownBoard.current = board;
+	}, [board]);
 
-	const fetchLatestOrders = useCallback(async () =>
+	useEffect(() =>
 	{
-		let version;
-		let result;
-		do
-		{
-			version = movesVersion.current;
-			result = await listOrdersForKanban(supabase);
-		}
-		while (version !== movesVersion.current);
-		return result;
-	}, [supabase]);
+		const timer = setInterval(() => setNow(new Date()), CLOCK_MS);
+		return () => clearInterval(timer);
+	}, []);
 
 	// Every load goes through here: the first one, someone else's change,
 	// coming back to the screen, after a save. Never mid-drag (the board would
 	// shift under the finger), and only the newest response wins. A failed
 	// refresh is quiet unless the user asked for it (`reportErrors`), and an
-	// identical list (the echo of the user's own move) changes nothing.
+	// identical list (the echo of the user's own change) changes nothing.
 	const refreshBoard = useCallback(async ({ reportErrors = false }: { reportErrors?: boolean } = {}) =>
 	{
 		if (dragging.current)
@@ -166,12 +184,12 @@ export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 			return;
 		}
 		const sequence = ++refreshSequence.current;
-		const { data, error } = await fetchLatestOrders();
+		const [statusResult, ordersResult] = await Promise.all([listOrderStatuses(supabase), listOrdersForKanban(supabase)]);
 		if (sequence !== refreshSequence.current)
 		{
 			return;
 		}
-		if (error || !data)
+		if (statusResult.error || !statusResult.data || ordersResult.error || !ordersResult.data)
 		{
 			if (!loaded.current)
 			{
@@ -179,7 +197,7 @@ export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 			}
 			else if (reportErrors)
 			{
-				setActionError("No se pudieron actualizar los pedidos. Refrescá la página.");
+				setActionError("No se pudieron actualizar los pedidos. Refresca la página.");
 			}
 			return;
 		}
@@ -189,20 +207,20 @@ export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 			return;
 		}
 
-		const next = applyPendingMoves(data, pendingMoves.current);
+		const next: Board = { orders: ordersResult.data, statuses: statusResult.data };
 		const firstLoad = !loaded.current;
 		loaded.current = true;
 		setLoadError(false);
-		if (JSON.stringify(next) === JSON.stringify(shownOrders.current))
+		if (JSON.stringify(next) === JSON.stringify(shownBoard.current))
 		{
 			return;
 		}
-		setOrders(next);
+		setBoard(next);
 		if (!firstLoad)
 		{
 			onOrderChanged?.();
 		}
-	}, [fetchLatestOrders, onOrderChanged]);
+	}, [supabase, onOrderChanged]);
 
 	useRefreshOnReturn(refreshBoard);
 	useOrdersLive(supabase, tenantId, refreshBoard);
@@ -229,59 +247,11 @@ export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 		useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
 	);
 
-	const groups = useMemo(() => groupOrdersByStatus(orders ?? []), [orders]);
-	const activeOrder = orders?.find((order) => order.id === activeId) ?? null;
-
-	// Optimistic update, reverted on error (failure mode: network error
-	// mid-drag) — the operator sees the move happen immediately, not after
-	// a round trip, since that's the whole point of drag-and-drop.
-	// Functional updates, and the revert touches this order only: on a phone
-	// two quick moves can overlap, and restoring a snapshot would undo the
-	// other. One write per order at a time, so they can't land out of order.
-	//
-	// `expectedStatus`: the status the control showed when it was tapped. With a
-	// live board the list can change under the finger, and Deshacer must not
-	// revert a colleague's move that arrived meanwhile.
-	async function moveOrder(orderId: string, newStatus: OrderStatus, expectedStatus?: OrderStatus): Promise<boolean>
-	{
-		const current = orders?.find((order) => order.id === orderId);
-		if (!current)
-		{
-			setActionError("Ese pedido ya no está en el tablero.");
-			return false;
-		}
-		if (expectedStatus && current.status !== expectedStatus)
-		{
-			setActionError(CHANGED_MESSAGE);
-			return false;
-		}
-		if (current.status === newStatus || pendingMoves.current.has(orderId))
-		{
-			return false;
-		}
-
-		const setStatus = (status: string) => setOrders((all) =>
-			all && all.map((order) => (order.id === orderId ? { ...order, status } : order)));
-
-		setActionError(null);
-		setStatus(newStatus);
-		pendingMoves.current.set(orderId, newStatus);
-		movesVersion.current++;
-
-		const { error } = await updateOrderStatus(supabase, orderId, newStatus, current.status);
-		pendingMoves.current.delete(orderId);
-		movesVersion.current++;
-
-		if (error)
-		{
-			setStatus(current.status);
-			setActionError(error.code === "PGRST116" ? CHANGED_MESSAGE : "No se pudo actualizar el pedido. Intenta de nuevo.");
-			refreshBoard();
-			return false;
-		}
-		onOrderChanged?.();
-		return true;
-	}
+	const columns = useMemo(() => boardColumns(board?.statuses ?? []), [board]);
+	const groups = useMemo(() => groupOrdersByColumn(board?.orders ?? [], columns), [board, columns]);
+	const activeOrder = board?.orders.find((order) => order.id === activeId) ?? null;
+	const activeStatus = columns.find((c) => c.key === activeOrder?.status);
+	const assignOrder = board?.orders.find((order) => order.id === assignOrderId) ?? null;
 
 	function handleDragStart(event: DragStartEvent)
 	{
@@ -303,12 +273,28 @@ export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 	function handleDragEnd(event: DragEndEvent)
 	{
 		const { active, over } = event;
-		const newStatus = over && orders ? resolveTargetStatus(String(over.id), orders) : null;
-		if (newStatus)
+		const targetKey = over && board ? resolveTargetKey(String(over.id), columns, board.orders) : null;
+		const target = columns.find((c) => c.key === targetKey);
+		const order = board?.orders.find((o) => o.id === active.id);
+		const from = columns.find((c) => c.key === order?.status);
+		if (order && from && target && canOfficeDrag(from, target))
 		{
-			moveOrder(String(active.id), newStatus);
+			setAssignOrderId(order.id);
 		}
 		finishDrag();
+	}
+
+	function handleAssignDone(outcome: AssignOutcome)
+	{
+		setAssignOrderId(null);
+		if (outcome === "stale")
+		{
+			setActionError(CHANGED_MESSAGE);
+		}
+		if (outcome !== "cancelled")
+		{
+			refreshBoard({ reportErrors: true });
+		}
 	}
 
 	if (loadError)
@@ -316,7 +302,7 @@ export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 		return <p className="p-4 text-sm text-destructive">No se pudieron cargar los pedidos.</p>;
 	}
 
-	if (orders === null)
+	if (board === null)
 	{
 		return <p className="p-4 text-sm text-muted-foreground">Cargando pedidos...</p>;
 	}
@@ -332,7 +318,14 @@ export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 				: null}
 
 			<div className="md:hidden">
-				<OrdersMobileBoard groups={groups} error={actionError} onMove={moveOrder} onOpenDetail={setOpenOrderId} />
+				<OrdersMobileBoard
+					columns={columns}
+					groups={groups}
+					now={now}
+					error={actionError}
+					onConfirm={setAssignOrderId}
+					onOpenDetail={setOpenOrderId}
+				/>
 			</div>
 
 			<div className="hidden md:block">
@@ -344,22 +337,31 @@ export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 					onDragCancel={finishDrag}
 				>
 					<div className="flex h-[calc(100vh-10rem)] gap-4 overflow-x-auto pb-2">
-						{ORDER_STATUSES.map((status) => (
+						{columns.map((status) => (
 							<DroppableColumn
-								key={status}
+								key={status.key}
 								status={status}
-								orders={groups[status]}
-								onConfirm={(orderId) => moveOrder(orderId, "confirmed", "pending")}
+								orders={groups[status.key]}
+								now={now}
+								accepts={activeStatus !== undefined && canOfficeDrag(activeStatus, status)}
+								onConfirm={setAssignOrderId}
 								onOpenDetail={setOpenOrderId}
 							/>
 						))}
 					</div>
 
 					<DragOverlay>
-						{activeOrder ? <OrderCard order={activeOrder} isDragging dragHandleProps={{}} /> : null}
+						{activeOrder ? <OrderCard order={activeOrder} status={activeStatus} now={now} isDragging dragHandleProps={{}} /> : null}
 					</DragOverlay>
 				</DndContext>
 			</div>
+
+			<AssignOrderPanel
+				order={assignOrder}
+				mode="confirm"
+				expectedStatus={assignOrder?.status ?? ""}
+				onDone={handleAssignDone}
+			/>
 
 			<OrderDetailPanel
 				orderId={openOrderId}

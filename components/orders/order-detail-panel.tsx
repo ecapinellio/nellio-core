@@ -3,10 +3,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { getOrderDetail, updateOrderDetail, type OrderDetail } from "@/lib/supabase/queries";
+import { createOrder, getOrderDetail, listOrderStatuses, updateOrderDetail, type OrderDetail } from "@/lib/supabase/queries";
+import { DEFAULT_STATUSES } from "@/lib/orders/board";
+import { detailActions, pendingLines, pendingNote } from "@/lib/orders/detail";
+import { isEditable, type OrderStatusDef } from "@/lib/orders/fulfillment";
 import { calculateOrderTotal } from "@/lib/order-math";
 import { formatChannel, formatOrderTimestamp } from "@/lib/format";
 import { OrderStatusBadge } from "@/components/orders/order-status-badge";
+import { AssignOrderPanel, type AssignMode, type AssignOutcome, type AssignTarget } from "@/components/orders/assign-order-panel";
+import { CancelOrderDialog, type ActionOutcome } from "@/components/orders/cancel-order-dialog";
+import { CorrectStatusDialog } from "@/components/orders/correct-status-dialog";
+import { DeliveryProof } from "@/components/orders/delivery-proof";
+import { OrderTimeline } from "@/components/orders/order-timeline";
 import {
 	Dialog,
 	DialogContent,
@@ -28,7 +36,14 @@ interface OrderDetailPanelProps
 	onClose: () => void;
 	/** Called after a successful save — OrdersKanban re-fetches the board (design review Decision 3/eng-review Decision 6), this panel doesn't patch anything itself. */
 	onSaved: () => void;
+	/** Role from the JWT, resolved on the server page: only admins see "Corregir estado". */
+	isAdmin: boolean;
 }
+
+/** Everything an open action needs, frozen when it opened: the status is the one the user saw, so a colleague's change is rejected (PT409). */
+type OpenAction =
+	| { kind: "cancel" | "correct"; status: string }
+	| { kind: "assign"; mode: AssignMode; status: string; target: AssignTarget };
 
 interface EditableItem
 {
@@ -57,7 +72,7 @@ function toPriceInput(price: number | null): string
  * items stack below `sm`. "Cambios sin guardar" is a short decision, so it's a
  * centered Dialog on top.
  */
-export function OrderDetailPanel({ orderId, onClose, onSaved }: OrderDetailPanelProps)
+export function OrderDetailPanel({ orderId, onClose, onSaved, isAdmin }: OrderDetailPanelProps)
 {
 	const supabase = useMemo(() => createClient(), []);
 	const [detail, setDetail] = useState<OrderDetail | null>(null);
@@ -73,6 +88,25 @@ export function OrderDetailPanel({ orderId, onClose, onSaved }: OrderDetailPanel
 	const [conflict, setConflict] = useState(false);
 	// Bumped by "Ver la versión actual" to load the order again.
 	const [loadCount, setLoadCount] = useState(0);
+	const [statuses, setStatuses] = useState<OrderStatusDef[]>(DEFAULT_STATUSES);
+	const [action, setAction] = useState<OpenAction | null>(null);
+	const [actionError, setActionError] = useState<string | null>(null);
+	const [notice, setNotice] = useState<string | null>(null);
+	const [creatingPending, setCreatingPending] = useState(false);
+
+	// The tenant's own status names and categories; the ECTEC defaults only if this fails.
+	useEffect(() =>
+	{
+		let active = true;
+		listOrderStatuses(supabase).then(({ data }) =>
+		{
+			if (active && data && data.length > 0)
+			{
+				setStatuses(data);
+			}
+		});
+		return () => { active = false; };
+	}, [supabase]);
 
 	// No synchronous setState here (React flags that as a cascading-render
 	// risk) — loading/error/stale-content are instead DERIVED below by
@@ -127,6 +161,11 @@ export function OrderDetailPanel({ orderId, onClose, onSaved }: OrderDetailPanel
 	const showError = failedOrderId !== null && failedOrderId === orderId;
 	const showLoading = orderId !== null && !showContent && !showError;
 
+	const statusDef = detail ? statuses.find((s) => s.key === detail.status) : undefined;
+	// Unknown status: lock rather than let a stale guess through (the server decides anyway).
+	const editable = statusDef !== undefined && isEditable(statusDef);
+	const actions = detailActions(statusDef, isAdmin);
+
 	const isDirty = notes.trim() !== originalNotes.trim()
 		|| items.some((item) => item.priceInput !== item.originalPriceInput);
 
@@ -140,6 +179,75 @@ export function OrderDetailPanel({ orderId, onClose, onSaved }: OrderDetailPanel
 		setSaveError(null);
 		setConflict(false);
 		setConfirmingDiscard(false);
+		setActionError(null);
+		setNotice(null);
+		setAction(null);
+	}
+
+	function openAction(next: OpenAction)
+	{
+		setActionError(null);
+		setNotice(null);
+		setAction(next);
+	}
+
+	function openAssign(mode: AssignMode)
+	{
+		if (!detail)
+		{
+			return;
+		}
+		const target = {
+			id: detail.id,
+			customerName: detail.customerName,
+			deliveryDate: detail.deliveryDate,
+			deliveryWindow: detail.deliveryWindow,
+		};
+		openAction({ kind: "assign", mode, status: detail.status, target });
+	}
+
+	function handleActionDone(outcome: ActionOutcome | AssignOutcome)
+	{
+		setAction(null);
+		if (outcome === "saved")
+		{
+			reset();
+			onSaved();
+		}
+		else if (outcome === "stale")
+		{
+			setActionError("Alguien cambió este pedido mientras tanto. No se guardó nada; ya ves la versión actual.");
+			setLoadCount((n) => n + 1);
+		}
+	}
+
+	async function handleCreatePending()
+	{
+		if (!detail)
+		{
+			return;
+		}
+		const lines = pendingLines(detail.items);
+		if (lines.length === 0)
+		{
+			setActionError("No queda nada pendiente en este pedido.");
+			return;
+		}
+		setCreatingPending(true);
+		setActionError(null);
+		setNotice(null);
+		const { error } = await createOrder(supabase, {
+			customer_id: detail.customerId,
+			notes: pendingNote(detail.createdAt),
+			items: lines.map((l) => ({ product_id: l.productId, quantity: l.quantity })),
+		});
+		setCreatingPending(false);
+		if (error)
+		{
+			setActionError("No se pudo crear el pedido pendiente. Intenta de nuevo.");
+			return;
+		}
+		setNotice("Se creó un pedido nuevo con lo pendiente. Aparece en la columna Pedido.");
 	}
 
 	function attemptClose()
@@ -245,7 +353,7 @@ export function OrderDetailPanel({ orderId, onClose, onSaved }: OrderDetailPanel
 									<SheetTitle>{detail.customerName}</SheetTitle>
 									<SheetDescription className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs tabular-nums">
 										<span>#{detail.id.slice(0, 8)}</span>
-										<OrderStatusBadge status={detail.status} />
+										<OrderStatusBadge status={detail.status} def={statusDef} />
 										<span>{formatChannel(detail.channel)}</span>
 										<span>{formatOrderTimestamp(detail.createdAt)}</span>
 										{detail.customerPhone ? <span>· {detail.customerPhone}</span> : null}
@@ -260,6 +368,7 @@ export function OrderDetailPanel({ orderId, onClose, onSaved }: OrderDetailPanel
 											rows={4}
 											value={notes}
 											onChange={(e) => setNotes(e.target.value)}
+											disabled={!editable}
 											className="font-mono text-xs"
 										/>
 									</div>
@@ -279,6 +388,7 @@ export function OrderDetailPanel({ orderId, onClose, onSaved }: OrderDetailPanel
 														aria-label={`Precio para ${item.productName}`}
 														value={item.priceInput}
 														onChange={(e) => updatePriceInput(item.id, e.target.value)}
+														disabled={!editable}
 														className="h-11 w-28 rounded-sm border border-input bg-transparent px-2 py-1 text-right font-mono text-sm tabular-nums outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:h-8 sm:w-24"
 													/>
 												</div>
@@ -301,6 +411,53 @@ export function OrderDetailPanel({ orderId, onClose, onSaved }: OrderDetailPanel
 												? <span className="ml-1 font-sans text-xs font-normal text-muted-foreground">+ {orderTotal.unpricedCount} sin precio</span>
 												: null}
 										</span>
+									</div>
+
+									{!editable
+										? <p className="text-xs text-muted-foreground">El pedido ya salió; no se puede editar.</p>
+										: null}
+
+									<DeliveryProof detail={detail} />
+
+									{actions.reassign || actions.reprogram || actions.cancel || actions.correct || actions.createPending
+										? (
+											<div className="flex flex-wrap gap-2 border-t border-border pt-3">
+												{actions.reassign
+													? <Button variant="outline" className="h-11 md:h-9" onClick={() => openAssign("reassign")}>Reasignar</Button>
+													: null}
+												{actions.reprogram
+													? <Button variant="outline" className="h-11 md:h-9" onClick={() => openAssign("reprogram")}>Reprogramar</Button>
+													: null}
+												{actions.createPending
+													? (
+														<Button variant="outline" className="h-11 md:h-9" onClick={handleCreatePending} disabled={creatingPending}>
+															{creatingPending ? "Creando..." : "Crear pedido con lo pendiente"}
+														</Button>
+													)
+													: null}
+												{actions.correct
+													? <Button variant="outline" className="h-11 md:h-9" onClick={() => openAction({ kind: "correct", status: detail.status })}>Corregir estado</Button>
+													: null}
+												{actions.cancel
+													? <Button variant="destructive" className="h-11 md:h-9" onClick={() => openAction({ kind: "cancel", status: detail.status })}>Cancelar pedido</Button>
+													: null}
+											</div>
+										)
+										: null}
+
+									{notice ? <p role="status" className="text-sm font-medium">{notice}</p> : null}
+									{actionError
+										? (
+											<Alert variant="destructive">
+												<AlertTriangle />
+												<AlertDescription>{actionError}</AlertDescription>
+											</Alert>
+										)
+										: null}
+
+									<div className="flex flex-col gap-3 border-t border-border pt-3">
+										<Label>Historial</Label>
+										<OrderTimeline events={detail.events} statuses={statuses} />
 									</div>
 
 									{saveError
@@ -329,15 +486,41 @@ export function OrderDetailPanel({ orderId, onClose, onSaved }: OrderDetailPanel
 
 								<FormPanelFooter>
 									<Button variant="secondary" className="h-11 md:h-9" onClick={attemptClose} disabled={saving}>
-										Cancelar
+										{editable ? "Cancelar" : "Cerrar"}
 									</Button>
-									<Button className="h-11 md:h-9" onClick={handleSave} disabled={saving}>
-										{saving ? "Guardando..." : "Guardar"}
-									</Button>
+									{editable
+										? (
+											<Button className="h-11 md:h-9" onClick={handleSave} disabled={saving}>
+												{saving ? "Guardando..." : "Guardar"}
+											</Button>
+										)
+										: null}
 								</FormPanelFooter>
 							</div>
 						)}
 			</FormPanel>
+
+			<AssignOrderPanel
+				order={action?.kind === "assign" ? action.target : null}
+				mode={action?.kind === "assign" ? action.mode : "reassign"}
+				expectedStatus={action?.status ?? ""}
+				onDone={handleActionDone}
+			/>
+
+			{detail && action?.kind === "cancel"
+				? <CancelOrderDialog orderId={detail.id} expectedStatus={action.status} onDone={handleActionDone} />
+				: null}
+			{detail && action?.kind === "correct"
+				? (
+					<CorrectStatusDialog
+						orderId={detail.id}
+						expectedStatus={action.status}
+						statuses={statuses}
+						hasDeliveryProof={detail.delivery !== null && detail.delivery.outcome !== "failed"}
+						onDone={handleActionDone}
+					/>
+				)
+				: null}
 
 			<Dialog open={confirmingDiscard} onOpenChange={(open) => { if (!open) setConfirmingDiscard(false); }}>
 				<DialogContent

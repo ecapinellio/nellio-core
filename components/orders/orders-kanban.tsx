@@ -137,6 +137,8 @@ interface OrdersKanbanProps
 	onOrderChanged?: () => void;
 	/** From the JWT, picks the live channel; RLS still decides what arrives (ADR-010). */
 	tenantId: string;
+	/** Only admins get the manual status correction in the detail. */
+	isAdmin: boolean;
 }
 
 /**
@@ -144,7 +146,7 @@ interface OrdersKanbanProps
  * the driver/window panel: the card stays in Pedido until it's saved. Every
  * other column shows what drivers do, read-only, and follows it live.
  */
-export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
+export function OrdersKanban({ onOrderChanged, tenantId, isAdmin }: OrdersKanbanProps)
 {
 	const supabase = useMemo(() => createClient(), []);
 	const [board, setBoard] = useState<Board | null>(null);
@@ -369,6 +371,7 @@ export function OrdersKanban({ onOrderChanged, tenantId }: OrdersKanbanProps)
 			/>
 
 			<OrderDetailPanel
+				isAdmin={isAdmin}
 				orderId={openOrderId}
 				onClose={() => setOpenOrderId(null)}
 				onSaved={() =>

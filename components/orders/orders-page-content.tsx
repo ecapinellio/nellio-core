@@ -33,7 +33,7 @@ export function OrdersPageContent({ isAdmin, tenantId }: OrdersPageContentProps)
 	return (
 		<>
 			{isAdmin ? <OrderStats refreshKey={statsRefreshKey} /> : null}
-			<OrdersKanban onOrderChanged={refreshStats} tenantId={tenantId} />
+			<OrdersKanban onOrderChanged={refreshStats} tenantId={tenantId} isAdmin={isAdmin} />
 		</>
 	);
 }

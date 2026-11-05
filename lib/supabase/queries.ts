@@ -436,6 +436,11 @@ export async function listOrdersForKanban(supabase: Client): Promise<QueryResult
 export interface OrderDetailItem
 {
 	id: string;
+	productId: string;
+	/** Null until a delivery was recorded. */
+	deliveredQuantity: number | null;
+	shortfallReason: string | null;
+	shortfallNote: string | null;
 	quantity: number;
 	priceAtOrder: number | null;
 	unitAtOrder: string | null;
@@ -454,6 +459,7 @@ export interface OrderDetail
 	notes: string | null;
 	createdAt: string;
 	updatedAt: string;
+	customerId: string;
 	customerName: string;
 	customerPhone: string | null;
 	items: OrderDetailItem[];
@@ -474,6 +480,8 @@ export interface OrderDetailEvent
 	actorName: string | null;
 	reason: string | null;
 	note: string | null;
+	/** A correction to delivered with no recorded delivery. */
+	withoutSignature: boolean;
 	createdAt: string;
 }
 
@@ -490,17 +498,18 @@ export interface OrderDetailDelivery
 	failureNote: string | null;
 }
 
-const ORDER_DETAIL_SELECT = "id, status, channel, notes, created_at, updated_at, " +
+const ORDER_DETAIL_SELECT = "id, status, customer_id, channel, notes, created_at, updated_at, " +
 	"delivery_date, delivery_window, invoice_status, " +
 	"customers(name, phone), users!orders_driver_fkey(name), " +
-	"order_events(action, from_status, to_status, reason, note, created_at, users(name)), " +
+	"order_events(action, from_status, to_status, reason, note, payload, created_at, users(name)), " +
 	"order_deliveries(outcome, receiver_name, signature_path, photo_path, failure_reason, failure_note, payment_method, amount_collected, created_at), " +
-	"order_items(id, quantity, price_at_order, unit_at_order, price_overridden_by, price_overridden_at, " +
+	"order_items(id, product_id, delivered_quantity, shortfall_reason, shortfall_note, quantity, price_at_order, unit_at_order, price_overridden_by, price_overridden_at, " +
 	"products(name), users!order_items_price_overridden_by_fkey(name))";
 
 interface OrderDetailRow
 {
 	id: string;
+	customer_id: string;
 	status: string;
 	channel: string;
 	notes: string | null;
@@ -517,6 +526,7 @@ interface OrderDetailRow
 		to_status: string;
 		reason: string | null;
 		note: string | null;
+		payload: { without_signature?: boolean } | null;
 		created_at: string;
 		users: { name: string } | null;
 	}[];
@@ -533,6 +543,10 @@ interface OrderDetailRow
 	}[];
 	order_items: {
 		id: string;
+		product_id: string;
+		delivered_quantity: number | null;
+		shortfall_reason: string | null;
+		shortfall_note: string | null;
 		quantity: number;
 		price_at_order: number | null;
 		unit_at_order: string | null;
@@ -574,6 +588,7 @@ export async function getOrderDetail(supabase: Client, orderId: string): Promise
 			actorName: e.users?.name ?? null,
 			reason: e.reason,
 			note: e.note,
+			withoutSignature: e.payload?.without_signature === true,
 			createdAt: e.created_at,
 		}));
 
@@ -609,6 +624,7 @@ export async function getOrderDetail(supabase: Client, orderId: string): Promise
 		notes: row.notes,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
+		customerId: row.customer_id,
 		customerName: row.customers?.name ?? "—",
 		customerPhone: row.customers?.phone ?? null,
 		driver: row.users?.name ?? null,
@@ -619,6 +635,10 @@ export async function getOrderDetail(supabase: Client, orderId: string): Promise
 		delivery,
 		items: row.order_items.map((item) => ({
 			id: item.id,
+			productId: item.product_id,
+			deliveredQuantity: item.delivered_quantity,
+			shortfallReason: item.shortfall_reason,
+			shortfallNote: item.shortfall_note,
 			quantity: item.quantity,
 			priceAtOrder: item.price_at_order,
 			unitAtOrder: item.unit_at_order,

@@ -639,3 +639,63 @@ see Urgency correction above. Deliberately not solved in slice 2: it's an
 **Priority:** P1 (raised from P2 — blocks slice 3, not just slice 5)
 **Depends on:** Slice 1 (products.price_per_unit/unit) — shipped. Blocks
 accurate kanban card pricing (slice 3) and the sales dashboard (slice 5).
+
+## Order Intake (forward-to-Nellio) and Go-to-market
+
+Plan approved in `/office-hours` on 2026-11-07:
+`~/.gstack/projects/ecapinellio-nellio-core/emiliocarbonell-main-design-20261107-100721.md`.
+Each step depends on the previous one.
+
+### 1. Real order messages for the test set
+
+**What:** Ask Alejandra (ECTEC) for 20 real orders exactly as they arrived (messy
+ones and "lo de siempre" included). Ask the cousin (Uni Empaques) for 10 real order emails.
+**Why:** The draft-order AI is measured against these before it is built or shown in a demo.
+**Effort:** S (no code) **Priority:** P1 **Depends on:** Nothing.
+
+### 2. AI order draft (the "brain")
+
+**What:** Message → order draft built from the tenant's catalog and customers. It
+flags what it could not match, reuses `checkPendingDuplicateOrder()`
+(`lib/supabase/queries.ts`) and keeps the original message in `orders.notes`. The draft
+lives only in the capture screen; `create_order()` runs only when the operator confirms.
+The AI call runs server-side (Route Handler / Server Action), never in the browser.
+v1 handles text only (no screenshots).
+**Why:** Core of the differentiator against Odoo and of the WhatsApp bot.
+**Success:** at least 14 of the 20 real messages come out with the right customer and
+products. Only changing a quantity or unit counts as a minor fix; any other change counts as a miss.
+**Effort:** M (human ~1-2 weeks / CC ~1-2 days) **Priority:** P1
+**Depends on:** #1. Run `/plan-eng-review` first (AI model, cost per order).
+
+### 3. Email intake (forward to a per-tenant address)
+
+**What:** The operator forwards the order email to `<slug>@pedidos.<domain>` and the draft
+lands in a per-tenant inbox table (with RLS and a `tenant_id` index).
+- Inbound provider: Resend Inbound or Postmark.
+- Only senders on a per-tenant allowlist with valid SPF/DKIM are accepted.
+- The webhook verifies the provider's signature and is excluded from login in `proxy.ts`.
+- Migration: add `'email'` to the `orders.channel` CHECK.
+**Why:** It is how Uni Empaques receives orders, and it is easier than WhatsApp.
+**Effort:** M **Priority:** P2 **Depends on:** #2 meeting its success criterion.
+
+### 4. WhatsApp intake (phase 2: Nellio's own number)
+
+**What:** The operator forwards the WhatsApp message to Nellio's number (Meta API). The tenant
+is identified by the operator's registered number; unknown numbers are ignored. Connecting
+each company's own number (the full bot) only comes later, if a company asks for it.
+**Effort:** L **Priority:** P3 **Depends on:** #3 and the open questions below.
+
+### Pending checks and open questions
+
+- [ ] Ask the cousin: why Odoo? Which modules? Who is implementing it? How will an
+      order that arrives by email get into Odoo?
+- [ ] Talk to at least 3 distributors outside the family. Signal: 2 of 3 ask to try it
+      or send real messages.
+- [ ] ECTEC: do customers write to a company number or to personal phones?
+- [ ] Do real messages carry enough detail (products, quantities) for the AI to get them right?
+- [ ] Meta WhatsApp API: cost per conversation, business verification, and whether one
+      number can be used in the app and the API at the same time.
+- [ ] Costa Rica: does the customers form accept Costa Rican tax IDs? Today it
+      validates El Salvador formats (NIT, NRC, DUI).
+- [ ] Which AI model, and what does it cost per order? (`/plan-eng-review`)
+- [ ] Pricing to validate: list $600/month, founder price $250 locked for 12 months, 3-month pilot at $125.

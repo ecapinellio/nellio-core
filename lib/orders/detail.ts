@@ -55,6 +55,7 @@ const EVENT_LABELS: Record<string, string> = {
 	deliver: "Entregado",
 	cancel: "Cancelado",
 	correct: "Estado corregido",
+	invoice: "Factura emitida",
 };
 
 export function eventLabel(action: string): string

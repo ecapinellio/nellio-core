@@ -25,14 +25,14 @@ export type Database = {
           Tables: {
             "customers": {
                   Row: {
-                    "active": boolean,"address": string | null,"cod_actividad": string | null,"created_at": string,"desc_actividad": string | null,"email": string | null,"id": string,"legal_name": string | null,"name": string,"nrc": string | null,"phone": string | null,"tax_id": string | null,"tenant_id": string,"updated_at": string,"updated_by": string | null
+                    "active": boolean,"address": string | null,"cod_actividad": string | null,"created_at": string,"department_code": string | null,"desc_actividad": string | null,"district_code": string | null,"email": string | null,"id": string,"legal_name": string | null,"municipality_code": string | null,"name": string,"nrc": string | null,"phone": string | null,"tax_id": string | null,"tenant_id": string,"updated_at": string,"updated_by": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "active"?: boolean,"address"?: string | null,"cod_actividad"?: string | null,"created_at"?: string,"desc_actividad"?: string | null,"email"?: string | null,"id"?: string,"legal_name"?: string | null,"name": string,"nrc"?: string | null,"phone"?: string | null,"tax_id"?: string | null,"tenant_id": string,"updated_at"?: string,"updated_by"?: string | null
+                    "active"?: boolean,"address"?: string | null,"cod_actividad"?: string | null,"created_at"?: string,"department_code"?: string | null,"desc_actividad"?: string | null,"district_code"?: string | null,"email"?: string | null,"id"?: string,"legal_name"?: string | null,"municipality_code"?: string | null,"name": string,"nrc"?: string | null,"phone"?: string | null,"tax_id"?: string | null,"tenant_id": string,"updated_at"?: string,"updated_by"?: string | null
                   }
                   Update: {
-                    "active"?: boolean,"address"?: string | null,"cod_actividad"?: string | null,"created_at"?: string,"desc_actividad"?: string | null,"email"?: string | null,"id"?: string,"legal_name"?: string | null,"name"?: string,"nrc"?: string | null,"phone"?: string | null,"tax_id"?: string | null,"tenant_id"?: string,"updated_at"?: string,"updated_by"?: string | null
+                    "active"?: boolean,"address"?: string | null,"cod_actividad"?: string | null,"created_at"?: string,"department_code"?: string | null,"desc_actividad"?: string | null,"district_code"?: string | null,"email"?: string | null,"id"?: string,"legal_name"?: string | null,"municipality_code"?: string | null,"name"?: string,"nrc"?: string | null,"phone"?: string | null,"tax_id"?: string | null,"tenant_id"?: string,"updated_at"?: string,"updated_by"?: string | null
                   }
                   Relationships: [
                     {
@@ -46,6 +46,52 @@ isOneToOne: false
       columns: ["updated_by"]
 isOneToOne: false
       referencedRelation: "users"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"dte_documents": {
+                  Row: {
+                    "attempts": number,"control_number": string | null,"created_at": string,"document": Json | null,"dte_type": string | null,"environment": string | null,"generation_code": string | null,"id": string,"invalidated_at": string | null,"invalidation_seal": string | null,"last_error": string | null,"next_attempt_at": string,"order_id": string,"processed_at": string | null,"reception_seal": string | null,"response": Json | null,"status": string,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attempts"?: number,"control_number"?: string | null,"created_at"?: string,"document"?: Json | null,"dte_type"?: string | null,"environment"?: string | null,"generation_code"?: string | null,"id"?: string,"invalidated_at"?: string | null,"invalidation_seal"?: string | null,"last_error"?: string | null,"next_attempt_at"?: string,"order_id": string,"processed_at"?: string | null,"reception_seal"?: string | null,"response"?: Json | null,"status"?: string,"tenant_id": string
+                  }
+                  Update: {
+                    "attempts"?: number,"control_number"?: string | null,"created_at"?: string,"document"?: Json | null,"dte_type"?: string | null,"environment"?: string | null,"generation_code"?: string | null,"id"?: string,"invalidated_at"?: string | null,"invalidation_seal"?: string | null,"last_error"?: string | null,"next_attempt_at"?: string,"order_id"?: string,"processed_at"?: string | null,"reception_seal"?: string | null,"response"?: Json | null,"status"?: string,"tenant_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "dte_documents_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "dte_documents_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"dte_sequences": {
+                  Row: {
+                    "dte_type": string,"last_number": number,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "dte_type": string,"last_number"?: number,"tenant_id": string
+                  }
+                  Update: {
+                    "dte_type"?: string,"last_number"?: number,"tenant_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "dte_sequences_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
       referencedColumns: ["id"]
     }
                   ]
@@ -323,6 +369,32 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"tenant_dte_credentials": {
+                  Row: {
+                    "api_password_secret": string,"certificate_secret": string,"key_password_secret": string,"tenant_id": string,"updated_at": string,"updated_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "api_password_secret": string,"certificate_secret": string,"key_password_secret": string,"tenant_id": string,"updated_at"?: string,"updated_by"?: string | null
+                  }
+                  Update: {
+                    "api_password_secret"?: string,"certificate_secret"?: string,"key_password_secret"?: string,"tenant_id"?: string,"updated_at"?: string,"updated_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "tenant_dte_credentials_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: true
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "tenant_dte_credentials_updated_by_fkey"
+      columns: ["updated_by"]
+isOneToOne: false
+      referencedRelation: "users"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"tenant_order_settings": {
                   Row: {
                     "customer_email_actions": (string)[],"require_driver_acceptance": boolean,"require_photo": boolean,"require_receiver_name": boolean,"require_signature": boolean,"tenant_id": string
@@ -345,14 +417,14 @@ isOneToOne: true
                   ]
                 },"tenants": {
                   Row: {
-                    "address": string | null,"cod_actividad": string | null,"commercial_name": string | null,"created_at": string,"desc_actividad": string | null,"email": string | null,"id": string,"name": string,"nit": string | null,"nrc": string | null,"phone": string | null
+                    "address": string | null,"cod_actividad": string | null,"commercial_name": string | null,"created_at": string,"department_code": string | null,"desc_actividad": string | null,"district_code": string | null,"dte_enabled": boolean,"dte_environment": string,"email": string | null,"establishment_code": string,"id": string,"legal_name": string | null,"mh_establishment_code": string | null,"mh_pos_code": string | null,"municipality_code": string | null,"name": string,"nit": string | null,"nrc": string | null,"phone": string | null,"pos_code": string,"prices_include_vat": boolean
                   }
                   ComputedFields: never
                   Insert: {
-                    "address"?: string | null,"cod_actividad"?: string | null,"commercial_name"?: string | null,"created_at"?: string,"desc_actividad"?: string | null,"email"?: string | null,"id"?: string,"name": string,"nit"?: string | null,"nrc"?: string | null,"phone"?: string | null
+                    "address"?: string | null,"cod_actividad"?: string | null,"commercial_name"?: string | null,"created_at"?: string,"department_code"?: string | null,"desc_actividad"?: string | null,"district_code"?: string | null,"dte_enabled"?: boolean,"dte_environment"?: string,"email"?: string | null,"establishment_code"?: string,"id"?: string,"legal_name"?: string | null,"mh_establishment_code"?: string | null,"mh_pos_code"?: string | null,"municipality_code"?: string | null,"name": string,"nit"?: string | null,"nrc"?: string | null,"phone"?: string | null,"pos_code"?: string,"prices_include_vat"?: boolean
                   }
                   Update: {
-                    "address"?: string | null,"cod_actividad"?: string | null,"commercial_name"?: string | null,"created_at"?: string,"desc_actividad"?: string | null,"email"?: string | null,"id"?: string,"name"?: string,"nit"?: string | null,"nrc"?: string | null,"phone"?: string | null
+                    "address"?: string | null,"cod_actividad"?: string | null,"commercial_name"?: string | null,"created_at"?: string,"department_code"?: string | null,"desc_actividad"?: string | null,"district_code"?: string | null,"dte_enabled"?: boolean,"dte_environment"?: string,"email"?: string | null,"establishment_code"?: string,"id"?: string,"legal_name"?: string | null,"mh_establishment_code"?: string | null,"mh_pos_code"?: string | null,"municipality_code"?: string | null,"name"?: string,"nit"?: string | null,"nrc"?: string | null,"phone"?: string | null,"pos_code"?: string,"prices_include_vat"?: boolean
                   }
                   Relationships: [
                     
@@ -397,7 +469,34 @@ isOneToOne: false
                 }
           }
           Functions: {
-            "assign_order":
+            "assign_dte_number":
+{ Args: { "p_doc_id": string,"p_dte_type": string }; Returns: {
+              "attempts": number,
+"control_number": string | null,
+"created_at": string,
+"document": Json | null,
+"dte_type": string | null,
+"environment": string | null,
+"generation_code": string | null,
+"id": string,
+"invalidated_at": string | null,
+"invalidation_seal": string | null,
+"last_error": string | null,
+"next_attempt_at": string,
+"order_id": string,
+"processed_at": string | null,
+"reception_seal": string | null,
+"response": Json | null,
+"status": string,
+"tenant_id": string
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "dte_documents"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
+"assign_order":
 { Args: { "p_delivery_date": string,"p_delivery_window": string,"p_driver_id": string,"p_expected_status": string,"p_order_id": string }; Returns: {
               "channel": string,
 "created_at": string,
@@ -444,6 +543,33 @@ isOneToOne: false
         to: "orders"
         isOneToOne: true
         isSetofReturn: false
+      } },
+"claim_dte_documents":
+{ Args: { "p_limit": number }; Returns: {
+              "attempts": number,
+"control_number": string | null,
+"created_at": string,
+"document": Json | null,
+"dte_type": string | null,
+"environment": string | null,
+"generation_code": string | null,
+"id": string,
+"invalidated_at": string | null,
+"invalidation_seal": string | null,
+"last_error": string | null,
+"next_attempt_at": string,
+"order_id": string,
+"processed_at": string | null,
+"reception_seal": string | null,
+"response": Json | null,
+"status": string,
+"tenant_id": string
+            }[]
+                          SetofOptions: {
+        from: "*"
+        to: "dte_documents"
+        isOneToOne: false
+        isSetofReturn: true
       } },
 "claim_order_notifications":
 { Args: { "p_limit": number }; Returns: {
@@ -493,6 +619,44 @@ isOneToOne: false
 "create_order":
 { Args: { "p_channel"?: string,"p_customer_id": string,"p_items": Json,"p_notes": string }; Returns: Json
                            },
+"dte_credentials_status":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
+"finish_dte":
+{ Args: { "p_doc_id": string,"p_error"?: string,"p_processed_at"?: string,"p_response"?: Json,"p_seal"?: string,"p_status": string }; Returns: {
+              "attempts": number,
+"control_number": string | null,
+"created_at": string,
+"document": Json | null,
+"dte_type": string | null,
+"environment": string | null,
+"generation_code": string | null,
+"id": string,
+"invalidated_at": string | null,
+"invalidation_seal": string | null,
+"last_error": string | null,
+"next_attempt_at": string,
+"order_id": string,
+"processed_at": string | null,
+"reception_seal": string | null,
+"response": Json | null,
+"status": string,
+"tenant_id": string
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "dte_documents"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
+"get_dte_credentials":
+{ Args: { "p_tenant_id": string }; Returns: {
+              "api_password": string,"certificate": string,"key_password": string
+            }[]
+                           },
+"get_order_invoice":
+{ Args: { "p_token": string }; Returns: Json
+                           },
 "get_order_tracking":
 { Args: { "p_token": string }; Returns: Json
                            },
@@ -521,6 +685,33 @@ isOneToOne: false
 "log_order_event":
 { Args: { "p_action": string,"p_from": string,"p_note": string,"p_order": Omit<Database["public"]['Tables']["orders"]['Row'], Database["public"]['Tables']["orders"]['ComputedFields']>,"p_payload": Json,"p_reason": string }; Returns: undefined
                            },
+"mark_dte_invalidated":
+{ Args: { "p_doc_id": string,"p_seal": string }; Returns: {
+              "attempts": number,
+"control_number": string | null,
+"created_at": string,
+"document": Json | null,
+"dte_type": string | null,
+"environment": string | null,
+"generation_code": string | null,
+"id": string,
+"invalidated_at": string | null,
+"invalidation_seal": string | null,
+"last_error": string | null,
+"next_attempt_at": string,
+"order_id": string,
+"processed_at": string | null,
+"reception_seal": string | null,
+"response": Json | null,
+"status": string,
+"tenant_id": string
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "dte_documents"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
 "normalize_name":
 { Args: { "p_name": string }; Returns: string
                            },
@@ -566,10 +757,13 @@ isOneToOne: false
 "address": string | null,
 "cod_actividad": string | null,
 "created_at": string,
+"department_code": string | null,
 "desc_actividad": string | null,
+"district_code": string | null,
 "email": string | null,
 "id": string,
 "legal_name": string | null,
+"municipality_code": string | null,
 "name": string,
 "nrc": string | null,
 "phone": string | null,
@@ -629,9 +823,67 @@ isOneToOne: false
         isOneToOne: true
         isSetofReturn: false
       } },
+"retry_dte":
+{ Args: { "p_order_id": string }; Returns: {
+              "attempts": number,
+"control_number": string | null,
+"created_at": string,
+"document": Json | null,
+"dte_type": string | null,
+"environment": string | null,
+"generation_code": string | null,
+"id": string,
+"invalidated_at": string | null,
+"invalidation_seal": string | null,
+"last_error": string | null,
+"next_attempt_at": string,
+"order_id": string,
+"processed_at": string | null,
+"reception_seal": string | null,
+"response": Json | null,
+"status": string,
+"tenant_id": string
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "dte_documents"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
 "role":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
+"save_company_fiscal":
+{ Args: { "p_data": Json }; Returns: {
+              "address": string | null,
+"cod_actividad": string | null,
+"commercial_name": string | null,
+"created_at": string,
+"department_code": string | null,
+"desc_actividad": string | null,
+"district_code": string | null,
+"dte_enabled": boolean,
+"dte_environment": string,
+"email": string | null,
+"establishment_code": string,
+"id": string,
+"legal_name": string | null,
+"mh_establishment_code": string | null,
+"mh_pos_code": string | null,
+"municipality_code": string | null,
+"name": string,
+"nit": string | null,
+"nrc": string | null,
+"phone": string | null,
+"pos_code": string,
+"prices_include_vat": boolean
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "tenants"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
 "save_customers":
 { Args: { "p_rows": Json }; Returns: Json
                            },
@@ -647,10 +899,13 @@ isOneToOne: false
 "address": string | null,
 "cod_actividad": string | null,
 "created_at": string,
+"department_code": string | null,
 "desc_actividad": string | null,
+"district_code": string | null,
 "email": string | null,
 "id": string,
 "legal_name": string | null,
+"municipality_code": string | null,
 "name": string,
 "nrc": string | null,
 "phone": string | null,
@@ -685,6 +940,9 @@ isOneToOne: false
       } },
 "seed_order_statuses":
 { Args: { "p_tenant_id": string }; Returns: undefined
+                           },
+"set_dte_credentials":
+{ Args: { "p_api_password": string,"p_certificate": string,"p_key_password": string }; Returns: undefined
                            },
 "sync_order_inventory":
 { Args: { "p_order_id": string }; Returns: undefined

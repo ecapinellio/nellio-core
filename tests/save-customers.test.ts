@@ -26,7 +26,8 @@ const { saveCustomers } = await import("@/app/(app)/customers/actions");
 
 const newRow = (name: string, over: Partial<CustomerSaveRow> = {}): CustomerSaveRow => ({
 	id: null, name, phone: null, address: null, tax_id: null, legal_name: null, nrc: null,
-	cod_actividad: null, desc_actividad: null, email: null, active: true, updated_at: null, ...over,
+	cod_actividad: null, desc_actividad: null, email: null, department_code: null, municipality_code: null, district_code: null,
+	active: true, updated_at: null, ...over,
 });
 
 describe("customers: save_customers(), formats, deactivation, capture search", () =>

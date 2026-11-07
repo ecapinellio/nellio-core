@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FISCAL_FIELDS, type CustomerRow } from "@/lib/customers/grid";
+import { PANEL_FIELDS, type CustomerRow } from "@/lib/customers/grid";
 import { Button } from "@/components/ui/button";
 import { SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { FormPanel, FormPanelFooter, FormPanelHeader } from "@/components/form-panel";
@@ -33,7 +33,7 @@ export function FiscalPanel({
 function FiscalForm({ row, onApply }: { row: CustomerRow; onApply: (key: string, values: FiscalValues) => void })
 {
 	const [values, setValues] = useState<FiscalValues>(() =>
-		Object.fromEntries(FISCAL_FIELDS.map((f) => [f, row[f]])) as FiscalValues);
+		Object.fromEntries(PANEL_FIELDS.map((f) => [f, row[f]])) as FiscalValues);
 
 	return (
 		<form onSubmit={(e) => { e.preventDefault(); onApply(row.key, values); }} noValidate className="flex min-h-full flex-col">

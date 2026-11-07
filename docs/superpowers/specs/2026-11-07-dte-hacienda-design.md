@@ -1,6 +1,6 @@
 # DTE a Hacienda al entregar el pedido (fase 4) — investigación, decisiones y plan
 
-Fecha: 2026-11-07 · Estado: en construcción (rama `feat/dte-hacienda`) ·
+Fecha: 2026-11-07 · Estado: construido, sin verificar contra `apitest` (rama `feat/dte-hacienda`) ·
 Caso base: ECTEC · Registra ADR-015 · Sigue a
 [2026-11-04-order-fulfillment-e2e-design.md](2026-11-04-order-fulfillment-e2e-design.md) §12
 

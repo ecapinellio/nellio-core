@@ -1,11 +1,12 @@
 "use client";
 
 import { isValidActivityCode, isValidEmail, normalizeNrc } from "@/lib/customers/parse";
-import { FISCAL_FIELDS, FISCAL_LABELS, type FiscalField } from "@/lib/customers/grid";
+import { FISCAL_FIELDS, FISCAL_LABELS, type FiscalField, type PanelField } from "@/lib/customers/grid";
+import { PlaceFields } from "@/components/place-fields";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export type FiscalValues = Record<FiscalField, string>;
+export type FiscalValues = Record<PanelField, string>;
 
 const PLACEHOLDERS: Record<FiscalField, string> = {
 	legal_name: "Distribuidora del Pacífico, S.A. de C.V.",
@@ -36,7 +37,7 @@ export function fiscalFieldError(field: FiscalField, value: string): string | nu
 	}
 }
 
-/** The five fiscal inputs, shared by the desktop panel and the phone sheet. */
+/** The fiscal inputs and the DTE location, shared by the desktop panel and the phone sheet. */
 export function FiscalFields({
 	values,
 	onChange,
@@ -44,7 +45,8 @@ export function FiscalFields({
 	focusField,
 }: {
 	values: FiscalValues;
-	onChange: (field: FiscalField, value: string) => void;
+	/** Called several times in a row by the location selects: use functional state updates. */
+	onChange: (field: PanelField, value: string) => void;
 	idPrefix: string;
 	/** Opened from a red Fiscal cell: land on the field with the problem. */
 	focusField?: FiscalField;
@@ -74,6 +76,10 @@ export function FiscalFields({
 					</div>
 				);
 			})}
+			<fieldset className="flex flex-col gap-4">
+				<legend className="mb-1 text-xs text-muted-foreground">Ubicación (la pide el crédito fiscal; la dirección es la de Contacto)</legend>
+				<PlaceFields values={values} onChange={onChange} idPrefix={idPrefix} />
+			</fieldset>
 		</div>
 	);
 }

@@ -9,7 +9,7 @@ export async function listCustomers(supabase: Client): Promise<{ data: CustomerR
 {
 	const { data, error } = await supabase
 		.from("customers")
-		.select("id, name, phone, address, tax_id, legal_name, nrc, cod_actividad, desc_actividad, email, active, updated_at")
+		.select("id, name, phone, address, tax_id, legal_name, nrc, cod_actividad, desc_actividad, email, department_code, municipality_code, district_code, active, updated_at")
 		.order("active", { ascending: false })
 		.order("name", { ascending: true });
 	return { data, error };

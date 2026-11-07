@@ -21,14 +21,23 @@ export const FISCAL_LABELS: Record<FiscalField, string> = {
 	email: "Correo",
 };
 
+/** Receptor location for the DTE (CAT-012/013/008 codes), picked in the fiscal panel. */
+export const LOCATION_FIELDS = ["department_code", "municipality_code", "district_code"] as const;
+export type LocationField = (typeof LOCATION_FIELDS)[number];
+/** Everything the fiscal panel edits. */
+export const PANEL_FIELDS = [...FISCAL_FIELDS, ...LOCATION_FIELDS] as const;
+export type PanelField = (typeof PANEL_FIELDS)[number];
+/** The chip counts the location as one item: "Faltan N" of this many. */
+export const FISCAL_TOTAL = FISCAL_FIELDS.length + 1;
+
 export const MAX_CUSTOMER_NAME = 200;
 export const MAX_PHONE = 100;
 export const MAX_ADDRESS = 500;
 /** Mirrors save_customers()' cap. */
 export const MAX_CUSTOMER_SAVE_ROWS = 1000;
 
-type TextField = CustomerColumn | FiscalField;
-export const TEXT_FIELDS: readonly TextField[] = [...CUSTOMER_GRID_COLUMNS, ...FISCAL_FIELDS];
+type TextField = CustomerColumn | PanelField;
+export const TEXT_FIELDS: readonly TextField[] = [...CUSTOMER_GRID_COLUMNS, ...PANEL_FIELDS];
 
 type CustomerValues = Record<TextField, string> & { active: boolean };
 
@@ -52,6 +61,9 @@ export interface CustomerRecord
 	cod_actividad: string | null;
 	desc_actividad: string | null;
 	email: string | null;
+	department_code: string | null;
+	municipality_code: string | null;
+	district_code: string | null;
 	active: boolean;
 	updated_at: string;
 }
@@ -242,7 +254,8 @@ export function sharedTaxIdNote(row: CustomerRow, ctx: CustomerContext): string 
 /** How many of the panel's fiscal fields are filled (the "Faltan N" chip). */
 export function fiscalFilled(row: CustomerRow): number
 {
-	return FISCAL_FIELDS.filter((field) => row[field].trim() !== "").length;
+	return FISCAL_FIELDS.filter((field) => row[field].trim() !== "").length
+		+ (LOCATION_FIELDS.every((field) => row[field] !== "") ? 1 : 0);
 }
 
 /** Saved with only a name — a capture quick-add ("Solo nombre", design D7). */
@@ -263,6 +276,9 @@ export interface CustomerSaveRow
 	cod_actividad: string | null;
 	desc_actividad: string | null;
 	email: string | null;
+	department_code: string | null;
+	municipality_code: string | null;
+	district_code: string | null;
 	active: boolean;
 	updated_at: string | null;
 }
@@ -282,6 +298,9 @@ export function toCustomerPayload(rows: CustomerRow[]): CustomerSaveRow[]
 		cod_actividad: text(row.cod_actividad),
 		desc_actividad: text(row.desc_actividad),
 		email: text(row.email),
+		department_code: text(row.department_code),
+		municipality_code: text(row.municipality_code),
+		district_code: text(row.district_code),
 		active: row.active,
 		updated_at: row.updatedAt,
 	}));
@@ -309,6 +328,14 @@ export function customerSaveRowError(row: CustomerSaveRow): string | null
 		if (value !== null && typeof value !== "string")
 		{
 			return `Dato inválido en "${name}".`;
+		}
+	}
+	for (const field of LOCATION_FIELDS)
+	{
+		const value = row[field] ?? null;
+		if (value !== null && (typeof value !== "string" || !/^[0-9]{2}$/.test(value)))
+		{
+			return `La ubicación de "${name}" no es válida.`;
 		}
 	}
 	if ((row.phone?.length ?? 0) > MAX_PHONE || (row.address?.length ?? 0) > MAX_ADDRESS)

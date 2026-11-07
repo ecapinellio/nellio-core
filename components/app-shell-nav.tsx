@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Boxes, Building2, History, ListOrdered, Package, PlusCircle, Truck, Users } from "lucide-react";
+import { Boxes, Building2, History, Landmark, ListOrdered, Package, PlusCircle, Truck, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isRouteAllowed } from "@/lib/rbac";
 
@@ -15,6 +15,7 @@ const navItems = [
 	{ href: "/inventory", label: "Inventario", icon: Boxes },
 	{ href: "/customers", label: "Clientes", icon: Building2 },
 	{ href: "/admin/users", label: "Usuarios", icon: Users },
+	{ href: "/admin/company", label: "Empresa", icon: Landmark },
 ];
 
 // role is the JWT-sourced app_metadata.role (see app/(app)/layout.tsx and

@@ -2,7 +2,7 @@
 
 export type NotificationKind =
 	| "received" | "confirmed" | "rescheduled" | "on_the_way"
-	| "delivered" | "partially_delivered" | "failed" | "cancelled";
+	| "delivered" | "partially_delivered" | "failed" | "cancelled" | "invoice_issued";
 
 export interface EmailData
 {
@@ -16,6 +16,8 @@ export interface EmailData
 	deliveredAt: string | null;
 	/** Lines delivered short, for partially_delivered. */
 	missing: { product: string; quantity: number }[];
+	/** invoice_issued: the representación gráfica (/t/<token>/factura). */
+	invoiceUrl?: string | null;
 }
 
 export interface Email
@@ -82,6 +84,14 @@ function body(kind: NotificationKind, d: EmailData): { subject: string; lines: s
 			return { subject: `No pudimos entregar tu pedido ${ref}`, lines: ["Hoy no pudimos entregar tu pedido. Te contactaremos para coordinar una nueva entrega."] };
 		case "cancelled":
 			return { subject: `Tu pedido ${ref} fue cancelado`, lines: ["Tu pedido fue cancelado. Si tienes dudas, responde a este correo."] };
+		case "invoice_issued":
+			return {
+				subject: `Factura electrónica de tu pedido ${ref}`,
+				lines: [
+					"Te enviamos la factura electrónica (DTE) de tu pedido. El archivo JSON va adjunto.",
+					...(d.invoiceUrl ? [`Puedes verla e imprimirla aquí: ${d.invoiceUrl}`] : []),
+				],
+			};
 	}
 }
 

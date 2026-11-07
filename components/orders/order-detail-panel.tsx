@@ -16,6 +16,7 @@ import { CorrectStatusDialog } from "@/components/orders/correct-status-dialog";
 import { DeliveryProof } from "@/components/orders/delivery-proof";
 import { OrderTimeline } from "@/components/orders/order-timeline";
 import { TrackingLink } from "@/components/orders/tracking-link";
+import { InvoiceBlock } from "@/components/orders/invoice-block";
 import {
 	Dialog,
 	DialogContent,
@@ -455,6 +456,8 @@ export function OrderDetailPanel({ orderId, onClose, onSaved, isAdmin }: OrderDe
 										: null}
 
 									<TrackingLink token={detail.trackingToken} customerEmail={detail.customerEmail} />
+
+									<InvoiceBlock detail={detail} isAdmin={isAdmin} onChanged={() => setLoadCount((n) => n + 1)} />
 
 									<div className="flex flex-col gap-3 border-t border-border pt-3">
 										<Label>Historial</Label>

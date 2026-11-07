@@ -17,7 +17,7 @@ import {
 
 const record = (over: Partial<CustomerRecord> = {}): CustomerRecord => ({
 	id: `id-${over.name ?? "x"}`, name: "Super Selectos Escalón", phone: "2222-3333", address: "Paseo Escalón", tax_id: "0614-010190-101-3",
-	legal_name: null, nrc: null, cod_actividad: null, desc_actividad: null, email: null, active: true, updated_at: "2026-11-01 10:00:00.123456+00", ...over,
+	legal_name: null, nrc: null, cod_actividad: null, desc_actividad: null, email: null, department_code: null, municipality_code: null, district_code: null, active: true, updated_at: "2026-11-01 10:00:00.123456+00", ...over,
 });
 
 const issues = (row: CustomerRow, rows: CustomerRow[] = [row]) => customerIssues(row, buildCustomerContext(rows));
@@ -121,7 +121,7 @@ describe("customer rows", () =>
 		expect(isDirtyCustomer(edited)).toBe(true);
 		expect(toCustomerPayload([edited])).toEqual([{
 			id: "id-Quick", name: "Quick", phone: null, address: null, tax_id: "01234567-8", legal_name: null, nrc: "123456-7",
-			cod_actividad: null, desc_actividad: null, email: null, active: true, updated_at: "2026-11-01 10:00:00.123456+00",
+			cod_actividad: null, desc_actividad: null, email: null, department_code: null, municipality_code: null, district_code: null, active: true, updated_at: "2026-11-01 10:00:00.123456+00",
 		}]);
 	});
 });

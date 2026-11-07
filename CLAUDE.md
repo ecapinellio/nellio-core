@@ -52,7 +52,8 @@ de la app.
 
 ### Tablas del núcleo (implementadas)
 - `tenants` — empresas que usan Nellio. **Global**, sin `tenant_id`. Incluye
-  datos fiscales del **emisor** para el DTE.
+  datos fiscales del **emisor** para el DTE y sus interruptores (`dte_enabled`,
+  `dte_environment`, `prices_include_vat`). Solo se edita con `save_company_fiscal()`.
 - `users` — gente de la empresa que usa el sistema. Ligada a `auth.users`.
   Roles: `admin` | `operator` | `driver`.
 - `customers` — empresas externas que le compran a la empresa (las que mandan
@@ -71,10 +72,12 @@ de la app.
 - `order_notifications` — cola de correos al cliente (ADR-013).
 - `inventory_movements` — entradas, conteos físicos y salidas/devoluciones por
   pedido. El stock es la suma (vista `product_stock`) (ADR-014).
+- `dte_documents` — cada DTE enviado (o por enviar) a Hacienda: tipo, número de
+  control, código de generación, JSON, sello, error (ADR-015). Correlativo en
+  `dte_sequences`. Credenciales en Vault vía `tenant_dte_credentials`.
 
 ### Pendiente de modelar (después del discovery con Milo y Alejandra)
 - Varias bodegas, lotes/vencimiento, costo del inventario (hoy: una bodega, solo cantidades)
-- Tabla `dte` completa (firma, transmisión, sello de recepción)
 
 ---
 
@@ -254,6 +257,28 @@ por falta de stock frenaría al operador por un conteo desactualizado.
 transición nueva queda cubierta si cambia `orders.status` o las cantidades de
 `order_items`. `authenticated` no escribe la tabla (sin GRANT).
 
+### ADR-015: DTE por cola + cron, firma en Node, credenciales en Vault; se factura al entregar
+**Decisión:** cuando `orders.invoice_status` pasa a `pending` (entregado) y la
+empresa tiene `dte_enabled`, un trigger encola una fila en `dte_documents`. La
+ruta `/api/cron/dte` (Vercel Cron cada 5 min, `CRON_SECRET`) arma el JSON en
+`lib/dte/build.ts` (Factura 01 si el cliente no tiene NRC, CCF 03 si tiene),
+asigna `numeroControl` y `codigoGeneracion` una sola vez (`assign_dte_number()`),
+firma JWS RS512 con el `.crt` de Hacienda y transmite. `finish_dte()` guarda el
+resultado, el `invoice_status` y el evento `invoice` (que encola el correo con
+el JSON adjunto) en una transacción. La representación gráfica es
+`/t/<token>/factura`.
+**Por qué:** igual que ADR-013, un fallo de Hacienda nunca bloquea ni deshace
+una entrega; Vercel no corre el firmador Docker de Hacienda. Las credenciales
+son por empresa y no pueden vivir en el código ni en el navegador.
+**Consecuencias:** las credenciales solo se leen con `get_dte_credentials()`
+(service_role); el admin las escribe con `set_dte_credentials()`. Reintentar no
+cambia los números y antes de reenviar se consulta a Hacienda (no duplicar).
+Activar el DTE exige datos fiscales y credenciales. El formato de las llamadas
+a Hacienda y del `.crt` no está verificado contra `apitest` (aislado en
+`lib/dte/hacienda.ts` y `sign.ts`). Pendiente: contingencia, retención de IVA,
+notas de crédito. Fuentes y decisiones:
+`docs/superpowers/specs/2026-11-07-dte-hacienda-design.md`.
+
 ---
 
 ## Vistas del frontend por rol (Fase 1)
@@ -367,7 +392,10 @@ parciales y fallidas, estadísticas por categoría, y la lógica pura de
 al cliente y el seguimiento público (cola por evento, envío con reintentos,
 `get_order_tracking()` y su caducidad), y el inventario (entradas/conteos solo
 admin, descuento al salir, devoluciones por parcial/fallida/corrección, y el
-pegado de conteos de `lib/inventory/`).
+pegado de conteos de `lib/inventory/`), y el DTE (`buildDte` validado contra
+los JSON Schemas oficiales de Hacienda en `tests/dte-schemas/`, total en letras,
+firma RS512, evento de invalidación; cola, correlativo, reintentos y caída de
+Hacienda con un `fetch` falso, credenciales en Vault, `save_company_fiscal()`).
 
 **CI:** `.github/workflows/test.yml` corre la suite en cada push/PR contra un
 stack de Supabase local efímero (sin secrets — son las keys demo locales).

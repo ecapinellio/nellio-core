@@ -473,6 +473,18 @@ export interface OrderDetail
 	events: OrderDetailEvent[];
 	/** Latest delivery attempt; proof URLs are signed for 1 h (null if signing failed). */
 	delivery: OrderDetailDelivery | null;
+	/** Latest DTE sent (or to send) to Hacienda (ADR-015). */
+	invoice: OrderDetailInvoice | null;
+}
+
+export interface OrderDetailInvoice
+{
+	status: "queued" | "issued" | "rejected" | "error" | "invalidated";
+	dteType: string | null;
+	controlNumber: string | null;
+	receptionSeal: string | null;
+	lastError: string | null;
+	processedAt: string | null;
 }
 
 export interface OrderDetailEvent
@@ -505,6 +517,7 @@ const ORDER_DETAIL_SELECT = "id, status, customer_id, channel, notes, created_at
 	"delivery_date, delivery_window, invoice_status, tracking_token, " +
 	"customers(name, phone, email), users!orders_driver_fkey(name), " +
 	"order_events(action, from_status, to_status, reason, note, payload, created_at, users(name)), " +
+	"dte_documents(status, dte_type, control_number, reception_seal, last_error, processed_at, created_at), " +
 	"order_deliveries(outcome, receiver_name, signature_path, photo_path, failure_reason, failure_note, payment_method, amount_collected, created_at), " +
 	"order_items(id, product_id, delivered_quantity, shortfall_reason, shortfall_note, quantity, price_at_order, unit_at_order, price_overridden_by, price_overridden_at, " +
 	"products(name), users!order_items_price_overridden_by_fkey(name))";
@@ -522,6 +535,15 @@ interface OrderDetailRow
 	delivery_window: string | null;
 	invoice_status: string;
 	tracking_token: string;
+	dte_documents: {
+		status: string;
+		dte_type: string | null;
+		control_number: string | null;
+		reception_seal: string | null;
+		last_error: string | null;
+		processed_at: string | null;
+		created_at: string;
+	}[];
 	customers: { name: string; phone: string | null; email: string | null } | null;
 	users: { name: string } | null;
 	order_events: {
@@ -637,6 +659,17 @@ export async function getOrderDetail(supabase: Client, orderId: string): Promise
 		deliveryDate: row.delivery_date,
 		deliveryWindow: row.delivery_window,
 		invoiceStatus: row.invoice_status,
+		invoice: [...row.dte_documents]
+			.sort((a, b) => b.created_at.localeCompare(a.created_at))
+			.slice(0, 1)
+			.map((d) => ({
+				status: d.status as OrderDetailInvoice["status"],
+				dteType: d.dte_type,
+				controlNumber: d.control_number,
+				receptionSeal: d.reception_seal,
+				lastError: d.last_error,
+				processedAt: d.processed_at,
+			}))[0] ?? null,
 		events,
 		delivery,
 		items: row.order_items.map((item) => ({

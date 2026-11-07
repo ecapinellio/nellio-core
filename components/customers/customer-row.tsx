@@ -4,7 +4,7 @@ import { memo, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { CellIssue } from "@/lib/grid/core";
 import {
-	FISCAL_FIELDS,
+	FISCAL_TOTAL,
 	customerIssues,
 	fiscalFilled,
 	isBlankCustomer,
@@ -170,7 +170,7 @@ export const CustomerRowView = memo(function CustomerRowView({
 								"flex h-9 max-w-full items-center truncate rounded-sm border px-2 text-xs font-medium",
 								issues.fiscal
 									? "border-destructive bg-destructive/5 text-destructive"
-									: fiscalCount === FISCAL_FIELDS.length
+									: fiscalCount === FISCAL_TOTAL
 										? "border-input text-status-delivered hover:bg-muted"
 										: "border-input hover:bg-muted",
 							)}
@@ -192,7 +192,7 @@ function fiscalChipLabel(filled: number): string
 	{
 		return "Agregar";
 	}
-	return filled === FISCAL_FIELDS.length ? "Completo" : `Faltan ${FISCAL_FIELDS.length - filled}`;
+	return filled === FISCAL_TOTAL ? "Completo" : `Faltan ${FISCAL_TOTAL - filled}`;
 }
 
 const COLUMN_ARIA: Record<CustomerColumn, string> = { name: "Nombre", phone: "Teléfono", address: "Dirección", tax_id: "NIT" };

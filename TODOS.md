@@ -220,17 +220,47 @@ flow shipping first — there's no real data to reconcile until then.
 **Priority:** P2
 **Depends on:** Fulfillment phase 1 shipped.
 
-### Phase 4: DTE invoice
+### ~~Phase 4: DTE invoice~~ (built 2026-11-07, ADR-015)
 
-**What:** Issue the DTE from a delivered order.
+**What:** Issue the DTE to Hacienda when an order is delivered (Factura 01 / CCF 03), with retry, invalidation, customer email with the JSON and a printable page.
 
-**Why:** Hacienda requires it.
+**Context:** `docs/superpowers/specs/2026-11-07-dte-hacienda-design.md`. Question 9 answered: invoice on delivery.
 
-**Context:** Spec §12, question 9 unanswered.
+### Turn on the DTE for ECTEC (apitest, then production)
 
-**Effort:** L
-**Priority:** P2 — blocked
-**Depends on:** Spec question 9 (ECTEC's answer).
+**What:**
+- [ ] Answers from ECTEC (spec §8): do catalog prices include VAT; NIT, NRC, legal name, activity, address codes; establishment/POS codes (own and Hacienda's); IVA withholding; exempt sales.
+- [ ] ECTEC requests Transmission access on factura.gob.sv and generates the test certificate + API password.
+- [ ] `supabase db push` for `20261108100000_dte.sql`; check `CRON_SECRET` is set in Vercel (shared with the email cron).
+- [ ] Fill `/admin/company` in test environment (`00`), upload the `.crt`, enable DTE.
+- [ ] Verify the unverified shapes against apitest (spec §7): auth/recepcion/consulta/anular requests and responses, `.crt` XML and key password rule. Fix `lib/dte/hacienda.ts` / `sign.ts` if they differ.
+- [ ] Minimum tests in apitest (per DTE type + invalidation + contingency), request authorization, production certificate, switch to `01`.
+
+**Why:** Nothing is sent until a company enables the DTE with its own credentials.
+
+**Effort:** M
+**Priority:** P1
+**Depends on:** ECTEC's answers and their apitest access.
+
+### DTE: contingency event and batch sending
+
+**What:** When Hacienda is down past the retries, send the contingency event (within 24 h) and the documents of that period, by batch (`/fesv/contingencia`, `/fesv/recepcionlote/`).
+
+**Why:** Required in Hacienda's minimum tests to authorize Transmission; today a long outage leaves the DTE in error for a manual retry.
+
+**Effort:** M
+**Priority:** P1
+**Depends on:** apitest access.
+
+### DTE: IVA withholding, credit notes
+
+**What:** `ivaRete` (1%) when the customer is a gran contribuyente; Nota de Crédito (05) for returns after an issued CCF.
+
+**Why:** Go to 0 / not issued today until ECTEC's accountant confirms they apply.
+
+**Effort:** M
+**Priority:** P2
+**Depends on:** ECTEC's accountant.
 
 ### Phase 5: status configuration screen and per-company switches
 

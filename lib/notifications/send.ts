@@ -106,6 +106,7 @@ async function sendOne(
 		customerName: o.customers?.name ?? "",
 		orderRef: o.id.slice(0, 8),
 		trackingUrl: `${appUrl()}/t/${o.tracking_token}`,
+		invoiceUrl: `${appUrl()}/t/${o.tracking_token}/factura`,
 		deliveryDate: o.delivery_date,
 		deliveryWindow: o.delivery_window,
 		receiverName: delivery?.receiver_name ?? null,
@@ -114,6 +115,21 @@ async function sendOne(
 			.filter((i) => i.delivered_quantity !== null && i.delivered_quantity < i.quantity)
 			.map((i) => ({ product: i.products?.name ?? "", quantity: i.quantity - i.delivered_quantity! })),
 	});
+
+	// The DTE file goes to the receptor with the email (Manual Funcional V2.0, IV).
+	let attachments: { filename: string; content: string }[] | undefined;
+	if (n.kind === "invoice_issued")
+	{
+		const { data: dte } = await supabase.from("dte_documents").select("generation_code, document, reception_seal")
+			.eq("order_id", o.id).eq("status", "issued").order("created_at", { ascending: false }).limit(1).maybeSingle();
+		if (!dte?.document)
+		{
+			// Invalidated meanwhile: nothing to send, and retrying won't change that.
+			return;
+		}
+		const file = JSON.stringify({ ...(dte.document as object), selloRecibido: dte.reception_seal }, null, 2);
+		attachments = [{ filename: `${dte.generation_code}.json`, content: Buffer.from(file).toString("base64") }];
+	}
 
 	const res = await fetch("https://api.resend.com/emails", {
 		method: "POST",
@@ -130,6 +146,7 @@ async function sendOne(
 			subject: email.subject,
 			text: email.text,
 			html: email.html,
+			attachments,
 		}),
 	});
 	if (!res.ok)

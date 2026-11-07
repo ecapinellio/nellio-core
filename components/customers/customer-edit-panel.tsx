@@ -2,14 +2,14 @@
 
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
-import { buildCustomerContext, customerIssues, FISCAL_FIELDS, type CustomerRow } from "@/lib/customers/grid";
+import { buildCustomerContext, customerIssues, PANEL_FIELDS, type CustomerRow } from "@/lib/customers/grid";
 import { normalizeTaxId } from "@/lib/customers/parse";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { FormPanel, FormPanelFooter, FormPanelHeader } from "@/components/form-panel";
-import { FiscalFields, firstFiscalError } from "@/components/customers/fiscal-fields";
+import { FiscalFields, firstFiscalError, type FiscalValues } from "@/components/customers/fiscal-fields";
 
 /**
  * Phone editing (customers design D8): one sheet with "Contacto" and
@@ -118,8 +118,8 @@ function EditForm({
 				<section className="flex flex-col gap-4" aria-labelledby="fiscal-title">
 					<h3 id="fiscal-title" className="text-sm font-semibold">Datos fiscales</h3>
 					<FiscalFields
-						values={Object.fromEntries(FISCAL_FIELDS.map((f) => [f, draft[f]])) as Record<(typeof FISCAL_FIELDS)[number], string>}
-						onChange={(field, value) => setDraft({ ...draft, [field]: value })}
+						values={Object.fromEntries(PANEL_FIELDS.map((f) => [f, draft[f]])) as FiscalValues}
+						onChange={(field, value) => setDraft((d) => ({ ...d, [field]: value }))}
 						idPrefix="c-fiscal"
 					/>
 				</section>

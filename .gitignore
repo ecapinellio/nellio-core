@@ -46,3 +46,10 @@ next-env.d.ts
 # Claude Code: personal settings and throwaway worktrees
 .claude/settings.local.json
 .claude/worktrees/
+# Playwright CLI output (may contain credentials)
+.playwright-cli/
+
+# Playwright
+/e2e/.auth/
+/playwright-report/
+/test-results/

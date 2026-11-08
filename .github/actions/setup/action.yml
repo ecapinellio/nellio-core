@@ -1,0 +1,36 @@
+name: Setup
+description: pnpm + Node + dependencies; optionally the local Supabase stack with its env vars exported.
+
+inputs:
+  supabase:
+    description: Start the local Supabase stack (migrations applied) and export its keys.
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v4
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 24
+        cache: pnpm
+
+    - run: pnpm install --frozen-lockfile
+      shell: bash
+
+    - if: inputs.supabase == 'true'
+      uses: supabase/setup-cli@v1
+      with:
+        version: latest
+
+    # No secrets: `supabase start` generates fresh demo keys for an ephemeral
+    # local stack that never touches a real project.
+    - if: inputs.supabase == 'true'
+      shell: bash
+      run: |
+        supabase start
+        STATUS=$(supabase status -o json)
+        echo "NEXT_PUBLIC_SUPABASE_URL=$(echo "$STATUS" | jq -r .API_URL)" >> "$GITHUB_ENV"
+        echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(echo "$STATUS" | jq -r .ANON_KEY)" >> "$GITHUB_ENV"
+        echo "SUPABASE_SERVICE_ROLE_KEY=$(echo "$STATUS" | jq -r .SERVICE_ROLE_KEY)" >> "$GITHUB_ENV"

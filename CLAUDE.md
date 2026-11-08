@@ -176,7 +176,7 @@ la misma consulta y RLS; aplicar eventos sueltos duplicaría esa lógica y se
 descuadraría con cualquier evento perdido (un corte de red los pierde).
 **Consecuencias:** Realtime evalúa el RLS de cada suscriptor, así que el
 aislamiento por tenant y la revocación (ADR-009) aplican igual; lo cubre
-`tests/orders-realtime.test.ts`. El filtro `tenant_id` del canal solo reduce
+`tests/integration/orders-realtime.test.ts`. El filtro `tenant_id` del canal solo reduce
 trabajo, no es seguridad. **DELETE no pasa por RLS ni por filtros en Realtime**
 (llega a todos con el `id`), así que el tablero solo escucha INSERT y UPDATE, y
 estas tablas no deben usar `REPLICA IDENTITY FULL`; si algún día se borran
@@ -290,6 +290,22 @@ a Hacienda y del `.crt` no está verificado contra `apitest` (aislado en
 notas de crédito. Fuentes y decisiones:
 `docs/superpowers/specs/2026-11-07-dte-hacienda-design.md`.
 
+### ADR-016: Pirámide de tests obligatoria (unit / integración / e2e) y CI como compuerta
+**Decisión:** todo cambio entra con tests, en tres niveles: unit (Vitest,
+lógica pura, sin Docker), integración (Vitest contra el Supabase local real)
+y e2e (Playwright contra `next dev`, sesión real por rol). CI corre los tres
+más lint, tipos y build en cada PR; la cobertura tiene umbrales que solo suben.
+**Por qué:** la seguridad vive en la DB (RLS, funciones security definer,
+triggers), así que mocks no prueban nada importante: integración contra
+Postgres real es el nivel principal. Unit da feedback en segundos sin
+Docker. E2E cubre lo que ningún otro nivel ve: proxy/redirecciones por rol,
+Server Actions, cookies de sesión y que la UI de verdad llame lo correcto.
+**Consecuencias:** e2e corre en `next dev` (BotID, ADR-011), así que no
+prueba el bundle de producción; eso lo cubre el job *Build*. Los specs
+comparten un tenant por corrida y corren en paralelo: cada test crea sus
+propios datos. La cobertura mide solo código TS (`lib/`, `hooks/`,
+`app/api/`); el SQL se cubre con los tests de integración, no con un número.
+
 ---
 
 ## Vistas del frontend por rol (Fase 1)
@@ -369,15 +385,44 @@ verificación en backend.
 
 ## 8. Testing
 
-**Comando:** `pnpm test` (una corrida) o `pnpm test:watch` (modo watch). Vitest.
+**Regla: todo cambio entra con tests.** Feature o fix sin test no se
+mergea. El nivel lo decide qué se rompe si falla (ADR-016):
 
-**Requiere el stack local de Supabase corriendo** (`supabase start`) — los
-tests son de integración contra Postgres real, no mocks. `tests/fixtures.ts`
+| Nivel | Dónde | Qué va ahí | Comando |
+|---|---|---|---|
+| Unit | `tests/unit/` | lógica pura (`lib/**` sin red ni DB): parseo, cálculos, reglas | `pnpm test:unit` (sin Docker, ~2 s) |
+| Integración | `tests/integration/` | todo lo que toca Supabase: RPCs, RLS, triggers, queries, Server Actions, rutas de cron | `pnpm test:integration` |
+| E2E | `e2e/` | flujos críticos de punta a punta en el navegador, por rol | `pnpm test:e2e` (Playwright) |
+
+- Bug = primero un test que lo reproduce y falla; después el fix.
+- Migración nueva (función, política, trigger) = test de integración con los
+  tres roles y otro tenant.
+- Pantalla o flujo nuevo que el usuario recorre = un spec e2e del camino
+  feliz + el permiso por rol. Los detalles de lógica van abajo en la pirámide.
+- Cobertura: `pnpm test:coverage` (unit + integración) con umbrales en
+  `vitest.config.mts` como trinquete — se suben cuando la cobertura sube,
+  nunca se bajan para que pase un PR.
+- `pnpm test` corre unit + integración; `pnpm test:watch` en modo watch.
+
+**Integración y e2e requieren el stack local de Supabase corriendo**
+(`supabase start`) — Postgres real, no mocks. `tests/integration/fixtures.ts`
 crea y borra tenants/usuarios reales vía `service_role`; tiene un guard que
 aborta si `NEXT_PUBLIC_SUPABASE_URL` no apunta a `127.0.0.1`/`localhost`.
 
+**E2E (Playwright):** `e2e/global-setup.ts` crea un tenant con
+`setupTenant()` + datos semilla (`e2e/seed.ts`) y lo borra al final;
+`e2e/auth.setup.ts` inicia sesión por el formulario real una vez por rol y
+guarda la sesión (`storageState`). Corre contra `next dev` en :3000 (reusa el
+tuyo si ya está corriendo): con `next start` BotID llamaría a Vercel y el
+login fallaría (ADR-011). Reglas: locators semánticos (`getByRole`,
+`getByLabel`, `getByPlaceholder`), nada de `waitForTimeout`; cada test crea
+lo que modifica (los specs corren en paralelo sobre el mismo tenant); un test
+que cierra sesión usa su propio usuario (logout revoca **todas** las sesiones
+del usuario). Skill `playwright-cli` (`.claude/skills/`) para explorar la UI
+y depurar con `--debug=cli`. Reporte: `pnpm exec playwright show-report`.
+
 **Patrón:** cada archivo de test crea su propio tenant + usuarios
-admin/operator/driver (`setupTenant()` en `tests/fixtures.ts`), inicia sesión
+admin/operator/driver (`setupTenant()` en `tests/integration/fixtures.ts`), inicia sesión
 de verdad con cada uno (no se simula el rol por SQL), y limpia todo en
 `afterAll`. Como `tenant_id` está en todas las tablas (ADR-001), los archivos
 corren en paralelo sin pisarse.
@@ -404,12 +449,20 @@ al cliente y el seguimiento público (cola por evento, envío con reintentos,
 `get_order_tracking()` y su caducidad), y el inventario (entradas/conteos solo
 admin, descuento al salir, devoluciones por parcial/fallida/corrección, y el
 pegado de conteos de `lib/inventory/`), y el DTE (`buildDte` validado contra
-los JSON Schemas oficiales de Hacienda en `tests/dte-schemas/`, total en letras,
+los JSON Schemas oficiales de Hacienda en `tests/unit/dte-schemas/`, total en letras,
 firma RS512, evento de invalidación; cola, correlativo, reintentos y caída de
 Hacienda con un `fetch` falso, credenciales en Vault, `save_company_fiscal()`).
+E2E: login por rol y contraseña incorrecta, redirecciones de `lib/rbac.ts`
+(chofer fuera de `/orders`, operador fuera de `/admin`), cierre de sesión,
+captura de pedido con cliente nuevo hasta el tablero, el chofer ve su pedido
+asignado, y el seguimiento público `/t/<token>`.
 
-**CI:** `.github/workflows/test.yml` corre la suite en cada push/PR contra un
+**CI:** `.github/workflows/test.yml` corre en cada push a `main` y cada PR,
+cuatro jobs en paralelo: *Lint · Types · Unit* (sin Docker), *Build*,
+*Integration + coverage* y *E2E (Playwright)* — los dos últimos contra un
 stack de Supabase local efímero (sin secrets — son las keys demo locales).
+Si falla e2e, el reporte y los traces quedan como artefacto del run. Los
+cuatro deben ser *required checks* en la protección de `main`.
 
 ---
 

@@ -67,6 +67,7 @@ export interface Credentials
 	certificate: string;
 	key_password: string;
 	api_password: string;
+	environment: string;
 }
 
 export async function loadCredentials(supabase: Client, tenantId: string): Promise<Credentials | null>
@@ -160,6 +161,14 @@ export async function processPendingDtes(supabase: Client, now: () => Date = () 
 				continue;
 			}
 			const env = doc.environment as Environment;
+			if (credentials.environment !== env)
+			{
+				await finish(supabase, doc, "error", {
+					error: `Las credenciales guardadas son del ambiente de ${env === "01" ? "Pruebas" : "Producción"}. Sube las de ${env === "01" ? "Producción" : "Pruebas"} en Empresa y reintenta.`,
+				});
+				result.failed++;
+				continue;
+			}
 			const nit = (order.tenant.nit ?? "").replace(/\D/g, "");
 			const tokenKey = `${doc.tenant_id}:${env}`;
 			if (!tokens.has(tokenKey))

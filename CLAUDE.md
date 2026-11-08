@@ -225,7 +225,7 @@ pantalla para editar los estados (TODOS, fase 5).
 ### ADR-013: Correos al cliente por cola + cron; seguimiento público por token
 **Decisión:** un trigger en `order_events` encola en `order_notifications`
 (misma transacción) un correo por paso que le importa al cliente; la ruta
-`/api/cron/notifications` (Vercel Cron cada 5 min, `CRON_SECRET`) los manda
+`/api/cron/notifications` (la despierta Supabase, ver abajo; `CRON_SECRET`) los manda
 por Resend (`RESEND_API_KEY`, `EMAIL_FROM`) con hasta 5 intentos. La página
 `/t/<token>` lee `get_order_tracking()` (security definer, `anon`), que
 devuelve solo lo que el cliente puede ver.
@@ -237,7 +237,11 @@ no hay un servidor propio donde enviar "después". El token
 momento. Qué acciones mandan correo: `tenant_order_settings.customer_email_actions`.
 El trigger se traga sus propios errores (`raise warning`). El link muere 30
 días después de entregado/cancelado. Sin `RESEND_API_KEY` la cola espera.
-`proxy.ts` excluye `t/` y `api/cron/`. Requiere plan Pro de Vercel (cron cada 5 min).
+`proxy.ts` excluye `t/` y `api/cron/`. **Quién despierta las colas:** Supabase, no
+Vercel Cron (Hobby solo permite un cron diario): `pg_net` llama la ruta apenas
+se encola algo (trigger por sentencia) y `pg_cron` cada 5 min para reintentos
+(`wake_queue()`, migración `20261108110000`). URL y secreto en Vault
+(`app_url`, `cron_secret` = `CRON_SECRET` de Vercel); sin ellos no se llama nada.
 
 ### ADR-014: Inventario como historial de movimientos; el pedido descuenta al salir
 **Decisión:** el stock de cada producto es la suma de `inventory_movements`
@@ -260,7 +264,7 @@ transición nueva queda cubierta si cambia `orders.status` o las cantidades de
 ### ADR-015: DTE por cola + cron, firma en Node, credenciales en Vault; se factura al entregar
 **Decisión:** cuando `orders.invoice_status` pasa a `pending` (entregado) y la
 empresa tiene `dte_enabled`, un trigger encola una fila en `dte_documents`. La
-ruta `/api/cron/dte` (Vercel Cron cada 5 min, `CRON_SECRET`) arma el JSON en
+ruta `/api/cron/dte` (despertada por Supabase como en ADR-013, `CRON_SECRET`) arma el JSON en
 `lib/dte/build.ts` (Factura 01 si el cliente no tiene NRC, CCF 03 si tiene),
 asigna `numeroControl` y `codigoGeneracion` una sola vez (`assign_dte_number()`),
 firma JWS RS512 con el `.crt` de Hacienda y transmite. `finish_dte()` guarda el
@@ -273,7 +277,14 @@ son por empresa y no pueden vivir en el código ni en el navegador.
 **Consecuencias:** las credenciales solo se leen con `get_dte_credentials()`
 (service_role); el admin las escribe con `set_dte_credentials()`. Reintentar no
 cambia los números y antes de reenviar se consulta a Hacienda (no duplicar).
-Activar el DTE exige datos fiscales y credenciales. El formato de las llamadas
+Activar el DTE exige datos fiscales y credenciales **del mismo ambiente**
+(las credenciales guardan el ambiente en que se subieron); pruebas y
+producción llevan correlativos separados (producción empieza en 1). Red de
+seguridad: `dte_backlog()` lista los pedidos entregados sin DTE emitido
+(fallidos, en cola o nunca encolados después de `dte_enabled_at`); `stuck` =
+fallido o sin sello 1 h después. Lo leen `/orders/facturas`, el aviso en
+`/orders` (funciona aunque el cron esté caído) y el correo diario a los admins
+(`/api/cron/dte-alerts`). El formato de las llamadas
 a Hacienda y del `.crt` no está verificado contra `apitest` (aislado en
 `lib/dte/hacienda.ts` y `sign.ts`). Pendiente: contingencia, retención de IVA,
 notas de crédito. Fuentes y decisiones:

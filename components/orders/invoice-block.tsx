@@ -75,7 +75,7 @@ export function InvoiceBlock({ detail, isAdmin, onChanged }: { detail: OrderDeta
 							: null}
 					</div>
 				)
-				: <p className="text-sm text-muted-foreground">Pendiente: el DTE no está activado para la empresa (Empresa, en el menú).</p>}
+				: <p className="text-sm text-muted-foreground">Todavía no se envió a Hacienda. Si el DTE está activado (Empresa, en el menú), usa Reintentar.</p>}
 
 			{canRetry || (isAdmin && invoice?.status === "issued")
 				? (

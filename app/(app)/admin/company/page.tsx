@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { CompanyForm } from "@/components/admin/company-form";
+import { CompanyForm, type CredentialStatus } from "@/components/admin/company-form";
 
 export const metadata: Metadata = {
 	title: "Empresa — Nellio Core",
@@ -38,6 +38,6 @@ export default async function AdminCompanyPage()
 		);
 	}
 
-	const status = credentials as { configured: boolean; updated_at: string | null } | null;
-	return <CompanyForm tenant={tenant} credentials={status ?? { configured: false, updated_at: null }} />;
+	const status = credentials as CredentialStatus | null;
+	return <CompanyForm tenant={tenant} credentials={status ?? { configured: false, updated_at: null, environment: null }} />;
 }

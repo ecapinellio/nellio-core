@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PlaceFields, type PlaceField } from "@/components/place-fields";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type Tenant = Database["public"]["Tables"]["tenants"]["Row"];
 
@@ -31,7 +32,16 @@ const CODE_FIELDS = [
 	{ key: "mh_pos_code", label: "Punto de venta (Hacienda)", placeholder: "0001", hint: "El que asignó Hacienda" },
 ] as const;
 
+const ENV_LABEL: Record<string, string> = { "00": "Pruebas", "01": "Producción" };
+
 type TextKey = (typeof TEXT_FIELDS)[number]["key"] | (typeof CODE_FIELDS)[number]["key"] | PlaceField;
+
+export interface CredentialStatus
+{
+	configured: boolean;
+	updated_at: string | null;
+	environment: string | null;
+}
 
 /**
  * The emisor data for the DTE plus Hacienda's credentials (ADR-015). The
@@ -40,7 +50,7 @@ type TextKey = (typeof TEXT_FIELDS)[number]["key"] | (typeof CODE_FIELDS)[number
  */
 export function CompanyForm({ tenant, credentials }: {
 	tenant: Tenant;
-	credentials: { configured: boolean; updated_at: string | null };
+	credentials: CredentialStatus;
 })
 {
 	const supabase = useMemo(() => createClient(), []);
@@ -50,6 +60,8 @@ export function CompanyForm({ tenant, credentials }: {
 				["district_code", tenant.district_code ?? ""]])) as Record<TextKey, string>);
 	const [vatIncluded, setVatIncluded] = useState(tenant.prices_include_vat);
 	const [environment, setEnvironment] = useState(tenant.dte_environment);
+	const [savedEnvironment, setSavedEnvironment] = useState(tenant.dte_environment);
+	const [confirmingProduction, setConfirmingProduction] = useState(false);
 	const [enabled, setEnabled] = useState(tenant.dte_enabled);
 	const [saving, setSaving] = useState(false);
 	const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -73,6 +85,10 @@ export function CompanyForm({ tenant, credentials }: {
 			p_data: { ...values, prices_include_vat: vatIncluded, dte_environment: environment, dte_enabled: enabled },
 		});
 		setSaving(false);
+		if (!error)
+		{
+			setSavedEnvironment(environment);
+		}
 		setMessage(error ? { ok: false, text: error.message } : { ok: true, text: "Guardado." });
 	}
 
@@ -96,7 +112,7 @@ export function CompanyForm({ tenant, credentials }: {
 		setCertName("");
 		setKeyPassword("");
 		setApiPassword("");
-		setCredStatus({ configured: true, updated_at: new Date().toISOString() });
+		setCredStatus({ configured: true, updated_at: new Date().toISOString(), environment: savedEnvironment });
 		setCredMessage({ ok: true, text: "Credenciales guardadas." });
 	}
 
@@ -141,9 +157,12 @@ export function CompanyForm({ tenant, credentials }: {
 						Pruebas (sin validez fiscal)
 					</label>
 					<label className="flex min-h-11 items-center gap-3">
-						<input type="radio" name="env" checked={environment === "01"} onChange={() => setEnvironment("01")} className="size-5 accent-primary" />
+						<input type="radio" name="env" checked={environment === "01"} onChange={() => setConfirmingProduction(true)} className="size-5 accent-primary" />
 						Producción
 					</label>
+					{environment !== savedEnvironment
+						? <p className="text-xs text-muted-foreground">Guarda y luego sube las credenciales de {ENV_LABEL[environment]}. Su numeración empieza aparte.</p>
+						: null}
 				</fieldset>
 				<label className="flex min-h-11 items-start gap-3 text-sm">
 					<input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="mt-0.5 size-5 accent-primary" />
@@ -166,7 +185,7 @@ export function CompanyForm({ tenant, credentials }: {
 					<h2 className="text-base font-semibold">Credenciales de Hacienda</h2>
 					<p className="text-sm text-muted-foreground">
 						{credStatus.configured
-							? <><CheckCircle2 className="mr-1 inline size-4 text-emerald-600" />Configuradas{credStatus.updated_at ? ` · ${formatOrderTimestamp(credStatus.updated_at)}` : ""}. Se guardan cifradas y no se vuelven a mostrar. Llena solo lo que quieras cambiar.</>
+							? <><CheckCircle2 className="mr-1 inline size-4 text-emerald-600" />Configuradas para {ENV_LABEL[credStatus.environment ?? ""] ?? "otro ambiente"}{credStatus.updated_at ? ` · ${formatOrderTimestamp(credStatus.updated_at)}` : ""}. Se guardan cifradas y no se vuelven a mostrar. Llena solo lo que quieras cambiar.</>
 							: "Del ambiente que elegiste arriba (factura.gob.sv → Certificado). Se guardan cifradas y no se vuelven a mostrar."}
 					</p>
 				</div>
@@ -196,6 +215,25 @@ export function CompanyForm({ tenant, credentials }: {
 					{credSaving ? <><Loader2 className="animate-spin" />Guardando…</> : "Guardar credenciales"}
 				</Button>
 			</form>
+
+			<Dialog open={confirmingProduction} onOpenChange={setConfirmingProduction}>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>¿Pasar a Producción?</DialogTitle>
+						<DialogDescription>
+							Desde que guardes, cada pedido entregado genera una factura real ante Hacienda, con validez fiscal y a nombre de la empresa. Hazlo solo cuando Hacienda haya autorizado a la empresa como emisor y tengas el certificado y la contraseña API de producción.
+						</DialogDescription>
+					</DialogHeader>
+					<DialogFooter>
+						<Button type="button" variant="outline" className="h-11 md:h-9" onClick={() => setConfirmingProduction(false)}>Seguir en Pruebas</Button>
+						<Button type="button" className="h-11 md:h-9" onClick={() =>
+						{
+							setEnvironment("01");
+							setConfirmingProduction(false);
+						}}>Pasar a Producción</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 		</div>
 	);
 }

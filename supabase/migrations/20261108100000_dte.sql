@@ -26,6 +26,8 @@ alter table public.tenants
   add column prices_include_vat boolean not null default false,
   add column dte_environment text not null default '00' check (dte_environment in ('00', '01')),
   add column dte_enabled boolean not null default false,
+  -- Last time DTE was turned on: delivered orders after it must have a DTE (dte_backlog).
+  add column dte_enabled_at timestamptz,
   -- not valid: existing rows (loaded by script) aren't rechecked until edited.
   add constraint tenants_nit_format check (nit is null or public.normalize_tax_id(nit) = nit) not valid,
   add constraint tenants_nrc_format check (nrc is null or public.normalize_nrc(nrc) = nrc) not valid,
@@ -52,6 +54,8 @@ create table public.tenant_dte_credentials (
   certificate_secret uuid not null,
   key_password_secret uuid not null,
   api_password_secret uuid not null,
+  -- Ambiente the tenant had when they were saved: test credentials never sign production DTEs.
+  environment text not null check (environment in ('00', '01')),
   updated_at timestamptz not null default now(),
   updated_by uuid references public.users (id) on delete set null
 );
@@ -74,6 +78,7 @@ declare
   v_cert text := nullif(btrim(p_certificate), '');
   v_key text := nullif(p_key_password, '');
   v_api text := nullif(p_api_password, '');
+  v_env text := (select t.dte_environment from public.tenants t where t.id = public.tenant_id());
 begin
   if v_tenant_id is null then
     raise exception 'Not authenticated' using errcode = '28000';
@@ -93,21 +98,25 @@ begin
     if v_cert is null or v_key is null or v_api is null then
       raise exception 'Falta el certificado, la clave privada o la contraseña API.' using errcode = '22004';
     end if;
-    insert into public.tenant_dte_credentials (tenant_id, certificate_secret, key_password_secret, api_password_secret, updated_by)
+    insert into public.tenant_dte_credentials (tenant_id, certificate_secret, key_password_secret, api_password_secret, environment, updated_by)
     values (
       v_tenant_id,
       vault.create_secret(v_cert, 'dte_certificate_' || v_tenant_id),
       vault.create_secret(v_key, 'dte_key_password_' || v_tenant_id),
       vault.create_secret(v_api, 'dte_api_password_' || v_tenant_id),
+      v_env,
       auth.uid()
     );
     return;
   end if;
 
+  if v_row.environment <> v_env and (v_cert is null or v_key is null or v_api is null) then
+    raise exception 'Cambiaste de ambiente: sube el certificado y las dos contraseñas del ambiente nuevo.' using errcode = '22004';
+  end if;
   if v_cert is not null then perform vault.update_secret(v_row.certificate_secret, v_cert); end if;
   if v_key is not null then perform vault.update_secret(v_row.key_password_secret, v_key); end if;
   if v_api is not null then perform vault.update_secret(v_row.api_password_secret, v_api); end if;
-  update public.tenant_dte_credentials set updated_at = now(), updated_by = auth.uid()
+  update public.tenant_dte_credentials set environment = v_env, updated_at = now(), updated_by = auth.uid()
   where tenant_id = v_tenant_id;
 end;
 $$;
@@ -124,9 +133,9 @@ set search_path = ''
 as $$
   select case when public.role() = 'admin' then
     coalesce(
-      (select jsonb_build_object('configured', true, 'updated_at', c.updated_at)
+      (select jsonb_build_object('configured', true, 'updated_at', c.updated_at, 'environment', c.environment)
        from public.tenant_dte_credentials c where c.tenant_id = public.tenant_id()),
-      jsonb_build_object('configured', false, 'updated_at', null))
+      jsonb_build_object('configured', false, 'updated_at', null, 'environment', null))
   end
 $$;
 revoke execute on function public.dte_credentials_status() from public, anon;
@@ -134,7 +143,7 @@ grant execute on function public.dte_credentials_status() to authenticated;
 
 -- The sender (service_role only) reads the decrypted values.
 create or replace function public.get_dte_credentials(p_tenant_id uuid)
-returns table (certificate text, key_password text, api_password text)
+returns table (certificate text, key_password text, api_password text, environment text)
 language sql
 stable
 security definer
@@ -143,7 +152,8 @@ as $$
   select
     (select s.decrypted_secret from vault.decrypted_secrets s where s.id = c.certificate_secret),
     (select s.decrypted_secret from vault.decrypted_secrets s where s.id = c.key_password_secret),
-    (select s.decrypted_secret from vault.decrypted_secrets s where s.id = c.api_password_secret)
+    (select s.decrypted_secret from vault.decrypted_secrets s where s.id = c.api_password_secret),
+    c.environment
   from public.tenant_dte_credentials c
   where c.tenant_id = p_tenant_id
 $$;
@@ -167,6 +177,7 @@ declare
   v_t public.tenants;
   v_value text;
   v_missing text[] := '{}';
+  v_was_enabled boolean;
 begin
   if v_tenant_id is null then
     raise exception 'Not authenticated' using errcode = '28000';
@@ -179,6 +190,7 @@ begin
   end if;
 
   select * into v_t from public.tenants t where t.id = v_tenant_id for update;
+  v_was_enabled := v_t.dte_enabled;
 
   v_value := nullif(btrim(coalesce(p_data ->> 'nit', '')), '');
   if p_data ? 'nit' then
@@ -224,8 +236,10 @@ begin
     end if;
     if v_t.phone is null then v_missing := array_append(v_missing, 'teléfono'); end if;
     if v_t.email is null then v_missing := array_append(v_missing, 'correo'); end if;
-    if not exists (select 1 from public.tenant_dte_credentials c where c.tenant_id = v_tenant_id) then
-      v_missing := array_append(v_missing, 'credenciales de Hacienda');
+    if not exists (select 1 from public.tenant_dte_credentials c
+                   where c.tenant_id = v_tenant_id and c.environment = v_t.dte_environment) then
+      v_missing := array_append(v_missing, 'credenciales de Hacienda del ambiente de '
+        || case v_t.dte_environment when '01' then 'Producción' else 'Pruebas' end);
     end if;
     if cardinality(v_missing) > 0 then
       raise exception 'Para activar el DTE falta: %.', array_to_string(v_missing, ', ') using errcode = '22023';
@@ -241,7 +255,8 @@ begin
       establishment_code = v_t.establishment_code, pos_code = v_t.pos_code,
       mh_establishment_code = v_t.mh_establishment_code, mh_pos_code = v_t.mh_pos_code,
       prices_include_vat = v_t.prices_include_vat, dte_environment = v_t.dte_environment,
-      dte_enabled = v_t.dte_enabled
+      dte_enabled = v_t.dte_enabled,
+      dte_enabled_at = case when v_t.dte_enabled and not v_was_enabled then now() else v_t.dte_enabled_at end
     where t.id = v_tenant_id
     returning * into v_t;
   exception when check_violation then
@@ -278,7 +293,7 @@ create table public.dte_documents (
   invalidated_at timestamptz,
   invalidation_seal text,
   created_at timestamptz not null default now(),
-  unique (tenant_id, control_number)
+  unique (tenant_id, environment, control_number)
 );
 create index dte_documents_order_idx on public.dte_documents (tenant_id, order_id);
 create index dte_documents_queued_idx on public.dte_documents (next_attempt_at) where status = 'queued';
@@ -294,13 +309,15 @@ revoke all on public.dte_documents from anon, authenticated;
 grant select on public.dte_documents to authenticated;
 grant select, insert, update, delete on public.dte_documents to service_role;
 
--- Correlativo per tenant and document type (Manual Funcional V2.0, XI:
--- sequential, never repeated within a calendar year).
+-- Correlativo per tenant, ambiente and document type (Manual Funcional V2.0,
+-- XI: sequential, never repeated within a calendar year). Per ambiente so the
+-- test DTEs don't use up production numbers: production starts at 1.
 create table public.dte_sequences (
   tenant_id uuid not null references public.tenants (id) on delete cascade,
+  environment text not null check (environment in ('00', '01')),
   dte_type text not null check (dte_type in ('01', '03')),
   last_number bigint not null default 0,
-  primary key (tenant_id, dte_type)
+  primary key (tenant_id, environment, dte_type)
 );
 alter table public.dte_sequences enable row level security;
 revoke all on public.dte_sequences from anon, authenticated;
@@ -322,14 +339,15 @@ begin
   if not found then
     raise exception 'DTE % not found', p_doc_id using errcode = 'P0002';
   end if;
-  if v_doc.control_number is not null and v_doc.dte_type = p_dte_type then
+  select * into v_t from public.tenants t where t.id = v_doc.tenant_id;
+  -- An ambiente change (pruebas -> producción) also takes a new number.
+  if v_doc.control_number is not null and v_doc.dte_type = p_dte_type and v_doc.environment = v_t.dte_environment then
     return v_doc;
   end if;
 
-  select * into v_t from public.tenants t where t.id = v_doc.tenant_id;
-  insert into public.dte_sequences as s (tenant_id, dte_type, last_number)
-  values (v_doc.tenant_id, p_dte_type, 1)
-  on conflict (tenant_id, dte_type) do update set last_number = s.last_number + 1
+  insert into public.dte_sequences as s (tenant_id, environment, dte_type, last_number)
+  values (v_doc.tenant_id, v_t.dte_environment, p_dte_type, 1)
+  on conflict (tenant_id, environment, dte_type) do update set last_number = s.last_number + 1
   returning last_number into v_n;
 
   update public.dte_documents d set
@@ -876,3 +894,85 @@ as $$
 $$;
 revoke execute on function public.get_order_invoice(text) from public;
 grant execute on function public.get_order_invoice(text) to anon, authenticated;
+
+-- ============================================================
+-- Backlog: delivered orders whose DTE isn't issued yet
+-- ============================================================
+-- The safety net for "a DTE never reached Hacienda and nobody noticed": the
+-- /orders/facturas list, the banner on /orders and the admins' daily email
+-- all read this. A delivered order of a tenant with DTE on shows up if its
+-- DTE failed, is still queued, or was never queued (enqueue_dte swallows its
+-- errors) when delivered after DTE was turned on. stuck = needs a person:
+-- failed, or not issued 1 hour after (5 attempts take ~1 hour; a cron that
+-- stopped running shows up here too).
+create or replace function public.dte_backlog_for(p_tenant_id uuid)
+returns table (
+  order_id uuid, tenant_id uuid, customer_name text, invoice_status text,
+  dte_status text, last_error text, since timestamptz, stuck boolean
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select o.id, o.tenant_id, c.name, o.invoice_status, d.status, d.last_error, s.since,
+    o.invoice_status = 'error' or s.since < now() - interval '1 hour'
+  from public.orders o
+  join public.tenants t on t.id = o.tenant_id and t.dte_enabled
+  left join public.customers c on c.id = o.customer_id
+  left join lateral (
+    select d.status, d.last_error, d.created_at from public.dte_documents d
+    where d.order_id = o.id order by d.created_at desc limit 1
+  ) d on true
+  left join lateral (
+    select max(dl.created_at) as delivered_at from public.order_deliveries dl
+    where dl.order_id = o.id and dl.outcome <> 'failed'
+  ) dl on true
+  cross join lateral (select coalesce(d.created_at, dl.delivered_at, o.created_at) as since) s
+  where o.invoice_status in ('pending', 'error')
+    and (p_tenant_id is null or o.tenant_id = p_tenant_id)
+    and (d.status is not null or coalesce(dl.delivered_at, o.created_at) >= t.dte_enabled_at)
+  order by s.since
+$$;
+revoke execute on function public.dte_backlog_for(uuid) from public, anon, authenticated;
+grant execute on function public.dte_backlog_for(uuid) to service_role;
+
+-- Operator/admin: their own tenant's backlog.
+create or replace function public.dte_backlog()
+returns table (
+  order_id uuid, tenant_id uuid, customer_name text, invoice_status text,
+  dte_status text, last_error text, since timestamptz, stuck boolean
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select * from public.dte_backlog_for(public.tenant_id())
+  where public.tenant_id() is not null and public.is_operator_or_admin()
+$$;
+revoke execute on function public.dte_backlog() from public, anon;
+grant execute on function public.dte_backlog() to authenticated;
+
+-- Service_role (daily email): tenants with stuck DTEs and their active admins' emails.
+create or replace function public.dte_backlog_alerts()
+returns table (tenant_id uuid, tenant_name text, admin_emails text[], stuck int)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select b.tenant_id, coalesce(t.commercial_name, t.name),
+    array(
+      select au.email from public.users u join auth.users au on au.id = u.id
+      where u.tenant_id = b.tenant_id and u.role = 'admin' and au.email is not null
+        and (au.banned_until is null or au.banned_until < now())
+    ),
+    count(*)::int
+  from public.dte_backlog_for(null) b
+  join public.tenants t on t.id = b.tenant_id
+  where b.stuck
+  group by b.tenant_id, t.commercial_name, t.name
+$$;
+revoke execute on function public.dte_backlog_alerts() from public, anon, authenticated;
+grant execute on function public.dte_backlog_alerts() to service_role;

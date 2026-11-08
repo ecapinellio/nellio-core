@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { OrdersPageContent } from "@/components/orders/orders-page-content";
 
 export const metadata: Metadata = {
@@ -18,6 +21,9 @@ export default async function OrdersPage()
 	const supabase = await createClient();
 	const { data: { user } } = await supabase.auth.getUser();
 	const role = user?.app_metadata.role;
+	// Works even if the DTE cron stopped: it reads the backlog, not the cron.
+	const { data: backlog } = await supabase.rpc("dte_backlog");
+	const stuck = backlog?.filter((r) => r.stuck).length ?? 0;
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -25,6 +31,18 @@ export default async function OrdersPage()
 				<h1 className="text-xl font-semibold tracking-tight">Pedidos</h1>
 				<p className="hidden text-sm text-muted-foreground md:block">Arrastra una card para cambiar su estado, o usa el botón Confirmar.</p>
 			</div>
+
+			{stuck
+				? (
+					<Alert variant="destructive">
+						<AlertTriangle />
+						<AlertDescription>
+							{stuck === 1 ? "1 pedido entregado no tiene" : `${stuck} pedidos entregados no tienen`} factura emitida en Hacienda.{" "}
+							<Link href="/orders/facturas" className="font-medium underline underline-offset-4">Revisar</Link>
+						</AlertDescription>
+					</Alert>
+				)
+				: null}
 
 			<OrdersPageContent isAdmin={role === "admin"} tenantId={user?.app_metadata.tenant_id ?? ""} />
 		</div>

@@ -7,6 +7,7 @@ import { createOrder, quickAddCustomer, quickAddProduct } from "@/lib/supabase/q
 
 vi.mock("server-only", () => ({}));
 const { processPendingDtes } = await import("@/lib/dte/process");
+const { sendDteAlerts } = await import("@/lib/dte/alerts");
 
 const SEAL = "2026A1B2C3D4E5F6A7B8C9D0E1F2A3B4C5D6E7F8";
 const KEY_PASSWORD = "Clave-Privada-1";
@@ -304,5 +305,81 @@ describe("DTE (fulfillment phase 4, ADR-015)", () =>
 			p_doc_id: doc!.id, p_status: "issued", p_seal: SEAL, p_processed_at: new Date().toISOString(), p_response: {}, p_error: "",
 		})).error?.code).toBe("42501");
 		await tenant.service.from("dte_documents").delete().eq("id", doc!.id);
+	});
+
+	it("backlog: failed and never-queued DTEs show up for staff and in the admins' daily alert", async () =>
+	{
+		const rejectedId = await delivered(tenant, company);
+		fakeHacienda(rejected);
+		await processPendingDtes(tenant.service);
+		// The trigger swallowed an error: delivered 2 h ago (DTE on since yesterday), no DTE row.
+		await tenant.service.from("tenants").update({ dte_enabled_at: new Date(Date.now() - 24 * 3600e3).toISOString() }).eq("id", tenant.tenantId);
+		const missedId = await delivered(tenant, consumer);
+		await tenant.service.from("dte_documents").delete().eq("order_id", missedId);
+		await tenant.service.from("order_deliveries").update({ created_at: new Date(Date.now() - 2 * 3600e3).toISOString() }).eq("order_id", missedId);
+		const freshId = await delivered(tenant, consumer);
+
+		const { data, error } = await tenant.operator.rpc("dte_backlog");
+		expect(error).toBeNull();
+		const row = (id: string) => data!.find((r) => r.order_id === id);
+		expect(row(rejectedId)).toMatchObject({ dte_status: "rejected", invoice_status: "error", stuck: true });
+		expect(row(missedId)).toMatchObject({ dte_status: null, invoice_status: "pending", stuck: true });
+		expect(row(freshId)).toMatchObject({ dte_status: "queued", stuck: false });
+
+		expect((await tenant.driver.rpc("dte_backlog")).data).toEqual([]);
+		expect((await other.admin.rpc("dte_backlog")).data).toEqual([]);
+		expect((await tenant.admin.rpc("dte_backlog_alerts")).error?.code).toBe("42501");
+		const { data: alerts } = await tenant.service.rpc("dte_backlog_alerts");
+		const mine = alerts!.find((a) => a.tenant_id === tenant.tenantId)!;
+		expect(mine.stuck).toBeGreaterThanOrEqual(2);
+		expect(mine.admin_emails).toHaveLength(1);
+
+		vi.stubEnv("RESEND_API_KEY", "re_test");
+		vi.stubEnv("EMAIL_FROM", "avisos@nellio.app");
+		const mails: { to: string[]; subject: string }[] = [];
+		vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init: RequestInit) =>
+		{
+			if (!String(input).includes("api.resend.com"))
+			{
+				return realFetch(input, init);
+			}
+			mails.push(JSON.parse(String(init.body)));
+			return new Response("{}", { status: 200 });
+		}));
+		await sendDteAlerts(tenant.service);
+		vi.unstubAllEnvs();
+		const mail = mails.find((m) => m.to[0] === mine.admin_emails[0])!;
+		expect(mail.subject).toContain("pedidos entregados no tienen factura emitida");
+		await tenant.service.from("dte_documents").delete().eq("order_id", freshId);
+	});
+
+	// Last: leaves the tenant in production.
+	it("production: its own numbering from 1; credentials must be of the same ambiente", async () =>
+	{
+		expect((await tenant.admin.rpc("save_company_fiscal", { p_data: { dte_environment: "01" } })).error?.message)
+			.toContain("credenciales de Hacienda del ambiente de Producción");
+		expect((await tenant.admin.rpc("save_company_fiscal", { p_data: { dte_environment: "01", dte_enabled: false } })).error).toBeNull();
+		expect((await tenant.admin.rpc("set_dte_credentials", { p_certificate: null as never, p_key_password: null as never, p_api_password: "prod" })).error?.message)
+			.toContain("Cambiaste de ambiente");
+
+		// Queued while the stored credentials are still the test ones: clear error, nothing sent.
+		await tenant.service.from("tenants").update({ dte_enabled: true }).eq("id", tenant.tenantId);
+		const id = await delivered(tenant, company);
+		const sent = fakeHacienda(processed);
+		await processPendingDtes(tenant.service);
+		const [doc] = await docOf(id);
+		expect(doc).toMatchObject({ status: "error", environment: "01" });
+		expect(doc.control_number).toMatch(/^DTE-03-M001P001-000000000000001$/);
+		expect(doc.last_error).toContain("Pruebas");
+		expect(sent).toEqual([]);
+
+		expect((await tenant.admin.rpc("set_dte_credentials", { p_certificate: testCertificate(), p_key_password: KEY_PASSWORD, p_api_password: "prod" })).error).toBeNull();
+		expect((await tenant.admin.rpc("dte_credentials_status")).data).toMatchObject({ environment: "01" });
+		expect((await tenant.admin.rpc("save_company_fiscal", { p_data: { dte_enabled: true } })).error).toBeNull();
+		expect((await tenant.operator.rpc("retry_dte", { p_order_id: id })).error).toBeNull();
+		const sentProd = fakeHacienda(processed);
+		await processPendingDtes(tenant.service);
+		expect((await docOf(id))[0]).toMatchObject({ status: "issued", environment: "01", control_number: doc.control_number });
+		expect(sentProd[0].url).toContain("https://api.dtes.mh.gob.sv/");
 	});
 });

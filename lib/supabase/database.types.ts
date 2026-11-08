@@ -77,14 +77,14 @@ isOneToOne: false
                   ]
                 },"dte_sequences": {
                   Row: {
-                    "dte_type": string,"last_number": number,"tenant_id": string
+                    "dte_type": string,"environment": string,"last_number": number,"tenant_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "dte_type": string,"last_number"?: number,"tenant_id": string
+                    "dte_type": string,"environment": string,"last_number"?: number,"tenant_id": string
                   }
                   Update: {
-                    "dte_type"?: string,"last_number"?: number,"tenant_id"?: string
+                    "dte_type"?: string,"environment"?: string,"last_number"?: number,"tenant_id"?: string
                   }
                   Relationships: [
                     {
@@ -371,14 +371,14 @@ isOneToOne: false
                   ]
                 },"tenant_dte_credentials": {
                   Row: {
-                    "api_password_secret": string,"certificate_secret": string,"key_password_secret": string,"tenant_id": string,"updated_at": string,"updated_by": string | null
+                    "api_password_secret": string,"certificate_secret": string,"environment": string,"key_password_secret": string,"tenant_id": string,"updated_at": string,"updated_by": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "api_password_secret": string,"certificate_secret": string,"key_password_secret": string,"tenant_id": string,"updated_at"?: string,"updated_by"?: string | null
+                    "api_password_secret": string,"certificate_secret": string,"environment": string,"key_password_secret": string,"tenant_id": string,"updated_at"?: string,"updated_by"?: string | null
                   }
                   Update: {
-                    "api_password_secret"?: string,"certificate_secret"?: string,"key_password_secret"?: string,"tenant_id"?: string,"updated_at"?: string,"updated_by"?: string | null
+                    "api_password_secret"?: string,"certificate_secret"?: string,"environment"?: string,"key_password_secret"?: string,"tenant_id"?: string,"updated_at"?: string,"updated_by"?: string | null
                   }
                   Relationships: [
                     {
@@ -417,14 +417,14 @@ isOneToOne: true
                   ]
                 },"tenants": {
                   Row: {
-                    "address": string | null,"cod_actividad": string | null,"commercial_name": string | null,"created_at": string,"department_code": string | null,"desc_actividad": string | null,"district_code": string | null,"dte_enabled": boolean,"dte_environment": string,"email": string | null,"establishment_code": string,"id": string,"legal_name": string | null,"mh_establishment_code": string | null,"mh_pos_code": string | null,"municipality_code": string | null,"name": string,"nit": string | null,"nrc": string | null,"phone": string | null,"pos_code": string,"prices_include_vat": boolean
+                    "address": string | null,"cod_actividad": string | null,"commercial_name": string | null,"created_at": string,"department_code": string | null,"desc_actividad": string | null,"district_code": string | null,"dte_enabled": boolean,"dte_enabled_at": string | null,"dte_environment": string,"email": string | null,"establishment_code": string,"id": string,"legal_name": string | null,"mh_establishment_code": string | null,"mh_pos_code": string | null,"municipality_code": string | null,"name": string,"nit": string | null,"nrc": string | null,"phone": string | null,"pos_code": string,"prices_include_vat": boolean
                   }
                   ComputedFields: never
                   Insert: {
-                    "address"?: string | null,"cod_actividad"?: string | null,"commercial_name"?: string | null,"created_at"?: string,"department_code"?: string | null,"desc_actividad"?: string | null,"district_code"?: string | null,"dte_enabled"?: boolean,"dte_environment"?: string,"email"?: string | null,"establishment_code"?: string,"id"?: string,"legal_name"?: string | null,"mh_establishment_code"?: string | null,"mh_pos_code"?: string | null,"municipality_code"?: string | null,"name": string,"nit"?: string | null,"nrc"?: string | null,"phone"?: string | null,"pos_code"?: string,"prices_include_vat"?: boolean
+                    "address"?: string | null,"cod_actividad"?: string | null,"commercial_name"?: string | null,"created_at"?: string,"department_code"?: string | null,"desc_actividad"?: string | null,"district_code"?: string | null,"dte_enabled"?: boolean,"dte_enabled_at"?: string | null,"dte_environment"?: string,"email"?: string | null,"establishment_code"?: string,"id"?: string,"legal_name"?: string | null,"mh_establishment_code"?: string | null,"mh_pos_code"?: string | null,"municipality_code"?: string | null,"name": string,"nit"?: string | null,"nrc"?: string | null,"phone"?: string | null,"pos_code"?: string,"prices_include_vat"?: boolean
                   }
                   Update: {
-                    "address"?: string | null,"cod_actividad"?: string | null,"commercial_name"?: string | null,"created_at"?: string,"department_code"?: string | null,"desc_actividad"?: string | null,"district_code"?: string | null,"dte_enabled"?: boolean,"dte_environment"?: string,"email"?: string | null,"establishment_code"?: string,"id"?: string,"legal_name"?: string | null,"mh_establishment_code"?: string | null,"mh_pos_code"?: string | null,"municipality_code"?: string | null,"name"?: string,"nit"?: string | null,"nrc"?: string | null,"phone"?: string | null,"pos_code"?: string,"prices_include_vat"?: boolean
+                    "address"?: string | null,"cod_actividad"?: string | null,"commercial_name"?: string | null,"created_at"?: string,"department_code"?: string | null,"desc_actividad"?: string | null,"district_code"?: string | null,"dte_enabled"?: boolean,"dte_enabled_at"?: string | null,"dte_environment"?: string,"email"?: string | null,"establishment_code"?: string,"id"?: string,"legal_name"?: string | null,"mh_establishment_code"?: string | null,"mh_pos_code"?: string | null,"municipality_code"?: string | null,"name"?: string,"nit"?: string | null,"nrc"?: string | null,"phone"?: string | null,"pos_code"?: string,"prices_include_vat"?: boolean
                   }
                   Relationships: [
                     
@@ -619,6 +619,21 @@ isOneToOne: false
 "create_order":
 { Args: { "p_channel"?: string,"p_customer_id": string,"p_items": Json,"p_notes": string }; Returns: Json
                            },
+"dte_backlog":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "customer_name": string,"dte_status": string,"invoice_status": string,"last_error": string,"order_id": string,"since": string,"stuck": boolean,"tenant_id": string
+            }[]
+                           },
+"dte_backlog_alerts":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "admin_emails": (string)[],"stuck": number,"tenant_id": string,"tenant_name": string
+            }[]
+                           },
+"dte_backlog_for":
+{ Args: { "p_tenant_id": string }; Returns: {
+              "customer_name": string,"dte_status": string,"invoice_status": string,"last_error": string,"order_id": string,"since": string,"stuck": boolean,"tenant_id": string
+            }[]
+                           },
 "dte_credentials_status":
 { Args: Record<PropertyKey, never>; Returns: Json
                            },
@@ -651,7 +666,7 @@ isOneToOne: false
       } },
 "get_dte_credentials":
 { Args: { "p_tenant_id": string }; Returns: {
-              "api_password": string,"certificate": string,"key_password": string
+              "api_password": string,"certificate": string,"environment": string,"key_password": string
             }[]
                            },
 "get_order_invoice":
@@ -863,6 +878,7 @@ isOneToOne: false
 "desc_actividad": string | null,
 "district_code": string | null,
 "dte_enabled": boolean,
+"dte_enabled_at": string | null,
 "dte_environment": string,
 "email": string | null,
 "establishment_code": string,

@@ -29,7 +29,16 @@ runs:
     - if: inputs.supabase == 'true'
       shell: bash
       run: |
-        supabase start
+        # Tests don't use these. Fewer containers = fewer host ports that can
+        # collide with the runner's ephemeral ports (mailpit's 54324 did).
+        EXCLUDE=studio,mailpit,imgproxy,edge-runtime,logflare,vector
+        # A port taken by another process on the runner fails the start; retry.
+        for attempt in 1 2 3; do
+          supabase start -x "$EXCLUDE" && break
+          [ "$attempt" = 3 ] && exit 1
+          supabase stop --no-backup || true
+          sleep 5
+        done
         STATUS=$(supabase status -o json)
         echo "NEXT_PUBLIC_SUPABASE_URL=$(echo "$STATUS" | jq -r .API_URL)" >> "$GITHUB_ENV"
         echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(echo "$STATUS" | jq -r .ANON_KEY)" >> "$GITHUB_ENV"

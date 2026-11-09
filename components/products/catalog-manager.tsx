@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, Plus } from "lucide-react";
+import { AlertTriangle, ClipboardPaste, Plus } from "lucide-react";
 import { saveProducts } from "@/app/(app)/products/actions";
 import type { SaveConflict } from "@/lib/products/catalog";
 import {
@@ -33,7 +33,7 @@ import { useEditableGrid } from "@/components/grid/use-editable-grid";
 import { EmptyFilter, GridToastView, GridToolbar, PasteRenameDialog, SaveBar } from "@/components/grid/grid-chrome";
 import { ConflictDialog } from "@/components/grid/conflict-dialog";
 import { CatalogRow, type RowHandlers } from "@/components/products/catalog-row";
-import { PasteGuide } from "@/components/grid/paste-guide";
+import { HowToGuide } from "@/components/how-to-guide";
 import { ProductEditPanel } from "@/components/products/product-edit-panel";
 
 const NOUNS = { one: "producto", many: "productos" };
@@ -173,7 +173,8 @@ export function CatalogManager({ products }: { products: CatalogProduct[] })
 			{guideOpen
 				? (
 					<div className="hidden md:block">
-						<PasteGuide
+						<HowToGuide
+							icon={ClipboardPaste}
 							title="Carga tu catálogo desde Excel"
 							steps={[
 								<>En Excel, selecciona y copia la columna de <strong>nombres</strong>.</>,

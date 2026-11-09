@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { CheckCircle2, KeyRound, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/lib/supabase/database.types";
 import { formatOrderTimestamp } from "@/lib/format";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PlaceFields, type PlaceField } from "@/components/place-fields";
+import { HowToGuide } from "@/components/how-to-guide";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type Tenant = Database["public"]["Tables"]["tenants"]["Row"];
@@ -73,6 +74,7 @@ export function CompanyForm({ tenant, credentials }: {
 	const [credStatus, setCredStatus] = useState(credentials);
 	const [credSaving, setCredSaving] = useState(false);
 	const [credMessage, setCredMessage] = useState<{ ok: boolean; text: string } | null>(null);
+	const [guideOpen, setGuideOpen] = useState(!credentials.configured);
 
 	const set = (key: TextKey, value: string) => setValues((v) => ({ ...v, [key]: value }));
 
@@ -182,13 +184,39 @@ export function CompanyForm({ tenant, credentials }: {
 
 			<form onSubmit={saveCredentials} noValidate className="flex flex-col gap-4 border-t pt-8">
 				<div className="flex flex-col gap-1">
-					<h2 className="text-base font-semibold">Credenciales de Hacienda</h2>
+					<div className="flex flex-wrap items-center justify-between gap-2">
+						<h2 className="text-base font-semibold">Credenciales de Hacienda</h2>
+						{!guideOpen
+							? <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setGuideOpen(true)}>¿De dónde saco esto?</Button>
+							: null}
+					</div>
 					<p className="text-sm text-muted-foreground">
 						{credStatus.configured
 							? <><CheckCircle2 className="mr-1 inline size-4 text-emerald-600" />Configuradas para {ENV_LABEL[credStatus.environment ?? ""] ?? "otro ambiente"}{credStatus.updated_at ? ` · ${formatOrderTimestamp(credStatus.updated_at)}` : ""}. Se guardan cifradas y no se vuelven a mostrar. Llena solo lo que quieras cambiar.</>
 							: "Del ambiente que elegiste arriba (factura.gob.sv → Certificado). Se guardan cifradas y no se vuelven a mostrar."}
 					</p>
 				</div>
+				{guideOpen
+					? (
+						<HowToGuide
+							icon={KeyRound}
+							title="Saca tus credenciales en Hacienda"
+							steps={[
+								<>Entra a <a href="https://factura.gob.sv" target="_blank" rel="noopener noreferrer" className="underline">factura.gob.sv</a> con el NIT de la empresa y la clave de Servicios en Línea de Hacienda (la que usa el contador para declarar).</>,
+								<>Si es la primera vez, haz la «Solicitud de Ingreso» y elige <strong>Sistema de Transmisión</strong>.</>,
+								<>Entra al ambiente que elegiste arriba: <strong>Pruebas</strong> o <strong>Producción</strong>.</>,
+								<>Genera el <strong>certificado</strong>: inventa una contraseña para la clave privada y descarga el archivo <strong>.crt</strong>.</>,
+								<>Genera la <strong>contraseña API</strong>.</>,
+								<>Sube aquí el .crt y escribe las dos contraseñas.</>,
+							]}
+							footnote={<>
+								Hacienda no vuelve a mostrar las contraseñas: guárdalas en un lugar seguro o genera unas nuevas si las pierdes.
+								{" "}¿Ya facturas con otro sistema? Pídele estos datos a tu proveedor; si generas unos nuevos en Producción, ese sistema puede dejar de facturar. Las credenciales de Pruebas no lo afectan y vencen a los 2 meses.
+							</>}
+							onClose={() => setGuideOpen(false)}
+						/>
+					)
+					: null}
 				<div className="flex flex-col gap-1.5">
 					<Label htmlFor="co-cert">Certificado (.crt)</Label>
 					<Input id="co-cert" type="file" accept=".crt,.xml,text/xml" className="h-11 md:h-9"

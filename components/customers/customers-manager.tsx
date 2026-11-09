@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, Plus } from "lucide-react";
+import { AlertTriangle, ClipboardPaste, Plus } from "lucide-react";
 import { saveCustomers } from "@/app/(app)/customers/actions";
 import type { CustomerConflict } from "@/lib/customers/catalog";
 import { normalizeName, rebaseChangedFields } from "@/lib/grid/core";
@@ -28,7 +28,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useEditableGrid } from "@/components/grid/use-editable-grid";
 import { EmptyFilter, GridToastView, GridToolbar, PasteRenameDialog, SaveBar } from "@/components/grid/grid-chrome";
 import { ConflictDialog } from "@/components/grid/conflict-dialog";
-import { PasteGuide } from "@/components/grid/paste-guide";
+import { HowToGuide } from "@/components/how-to-guide";
 import { CustomerRowView, type CustomerRowHandlers } from "@/components/customers/customer-row";
 import { FiscalPanel } from "@/components/customers/fiscal-panel";
 import { CustomerEditPanel } from "@/components/customers/customer-edit-panel";
@@ -190,7 +190,8 @@ export function CustomersManager({ customers }: { customers: CustomerRecord[] })
 			{guideOpen
 				? (
 					<div className="hidden md:block">
-						<PasteGuide
+						<HowToGuide
+							icon={ClipboardPaste}
 							title="Carga tus clientes desde Excel"
 							steps={[
 								<>En Excel, selecciona y copia la columna de <strong>nombres</strong> (una fila por cliente o sucursal).</>,

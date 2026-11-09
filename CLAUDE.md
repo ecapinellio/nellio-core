@@ -513,3 +513,13 @@ Always read DESIGN.md before making any visual or UI decisions.
 All font choices, colors, spacing, and aesthetic direction are defined there.
 Do not deviate without explicit user approval.
 In QA mode, flag any code that doesn't match DESIGN.md.
+
+**Patrones compartidos (la app se ve igual en todas partes):** antes de crear
+un componente de UI, buscar si ya existe uno para eso en `components/` y
+usarlo. Si hace falta algo nuevo que se repite, va a `components/` como
+componente compartido, no copiado en cada pantalla.
+- **Guías "cómo hacer"** (pasos para el usuario): siempre `HowToGuide`
+  (`components/how-to-guide.tsx`): pasos numerados cortos en "tú", ejemplo
+  opcional y nota al pie. Abierta cuando todavía no hay nada (tabla vacía, sin
+  credenciales); al cerrarla queda un link "¿Cómo…?" / "¿De dónde saco
+  esto?" para volver a abrirla. Nada de `<details>` ni textos de ayuda sueltos.
